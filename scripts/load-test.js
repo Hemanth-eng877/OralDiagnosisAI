@@ -40,6 +40,11 @@ export default function () {
             res = http.post(`${BASE_URL}${endpoint.url}`, endpoint.body, params);
         }
 
+        console.log(`Request: ${endpoint.method} ${BASE_URL}${endpoint.url} -> ${res.status}`);
+        if (res.body) {
+            console.log(String(res.body).substring(0, 300));
+        }
+
         // Validate response
         check(res, {
             'status is 200 or expected': (r) => r.status === endpoint.expectedStatus || r.status === 200 || r.status === 201 || r.status === 401,
