@@ -42,8 +42,10 @@ export default function () {
 
         console.log("================================");
         console.log("URL:", res.request.url);
-        console.log("METHOD:", res.request.method);
         console.log("STATUS:", res.status);
+        if (res.headers && res.headers['Location']) {
+            console.log("REDIRECT:", res.headers['Location']);
+        }
         console.log("BODY:", res.body ? String(res.body).substring(0, 200) : "");
         console.log("================================");
 
