@@ -62,7 +62,7 @@ class FallbackDocumentRef:
         self.collection = collection
         self.id = doc_id
 
-    def set(self, data, merge=False):
+    def set(self, data, merge=False, **kwargs):
         existing = self.collection._items.get(self.id)
         if merge and existing:
             merged = dict(existing)
@@ -74,7 +74,7 @@ class FallbackDocumentRef:
         self.collection._items[self.id] = data
         return None
 
-    def get(self):
+    def get(self, **kwargs):
         data = self.collection._items.get(self.id)
         if data is None:
             return FallbackDocument(self.collection, self.id, exists=False)
@@ -98,7 +98,7 @@ class FallbackQuery:
     def limit(self, count):
         return FallbackQuery(self.collection, field=self.field, operator=self.operator, value=self.value, limit=count)
 
-    def stream(self):
+    def stream(self, **kwargs):
         docs = []
         for doc_id, data in self.collection._items.items():
             if self.field is None:
@@ -208,28 +208,28 @@ def _created_at_value(data):
 
 
 def _get_user_by_email(email):
-    docs = users_ref.where("email", "==", email).limit(1).stream()
+    docs = users_ref.where("email", "==", email).limit(1).stream(timeout=5.0)
     for doc in docs:
         return _serialize_doc(doc)
     return None
 
 
 def _get_user_by_id(user_id):
-    doc = users_ref.document(user_id).get()
+    doc = users_ref.document(user_id).get(timeout=5.0)
     if not doc.exists:
         return None
     return _serialize_doc(doc)
 
 
 def _get_patient_by_id(patient_id):
-    doc = patients_ref.document(str(patient_id)).get()
+    doc = patients_ref.document(str(patient_id)).get(timeout=5.0)
     if not doc.exists:
         return None
     return _serialize_doc(doc)
 
 
 def _get_diagnosis_by_id(diagnosis_id):
-    doc = diagnoses_ref.document(str(diagnosis_id)).get()
+    doc = diagnoses_ref.document(str(diagnosis_id)).get(timeout=5.0)
     if not doc.exists:
         return None
     return _serialize_doc(doc)
@@ -621,7 +621,11 @@ def api_login():
     data = request.get_json() or {}
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
-    user = _get_user_by_email(email)
+    
+    try:
+        user = _get_user_by_email(email)
+    except Exception:
+        return jsonify({"status": "error", "message": "Firebase service temporarily unavailable"}), 503
     
     if user is None or not check_password_hash(user["password_hash"], password):
         return jsonify({"status": "error", "message": "Invalid email or password."}), 401
@@ -639,18 +643,22 @@ def api_signup():
     if not name or not email or not password:
         return jsonify({"status": "error", "message": "All fields are required."}), 400
         
-    existing = _get_user_by_email(email)
-    if existing:
-        return jsonify({"status": "error", "message": "Account exists."}), 400
+    try:
+        existing = _get_user_by_email(email)
+        if existing:
+            return jsonify({"status": "error", "message": "Account exists."}), 400
+            
+        user_ref = users_ref.document()
+        user_id = user_ref.id
+        user_ref.set({
+            "id": user_id,
+            "name": name,
+            "email": email,
+            "password_hash": generate_password_hash(password),
+        }, timeout=5.0)
+    except Exception:
+        return jsonify({"status": "error", "message": "Firebase service temporarily unavailable"}), 503
         
-    user_ref = users_ref.document()
-    user_id = user_ref.id
-    user_ref.set({
-        "id": user_id,
-        "name": name,
-        "email": email,
-        "password_hash": generate_password_hash(password),
-    })
     return jsonify({"status": "success", "message": "Account created.", "user_id": user_id})
 
 @app.route("/api/dashboard", methods=["GET"])
@@ -659,8 +667,11 @@ def api_dashboard():
     if not user_id:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
         
-    patients = list(patients_ref.where("user_id", "==", user_id).stream())
-    diagnoses = list(diagnoses_ref.where("user_id", "==", user_id).stream())
+    try:
+        patients = list(patients_ref.where("user_id", "==", user_id).stream(timeout=5.0))
+        diagnoses = list(diagnoses_ref.where("user_id", "==", user_id).stream(timeout=5.0))
+    except Exception:
+        return jsonify({"status": "error", "message": "Firebase service temporarily unavailable"}), 503
     
     recent = []
     for doc in sorted(diagnoses, key=lambda item: _created_at_value(item.to_dict() or {}), reverse=True)[:5]:
@@ -796,10 +807,14 @@ def api_reports():
     if not user_id:
         return jsonify({"status": "error", "message": "Unauthorized"}), 401
     records = []
-    for doc in diagnoses_ref.where("user_id", "==", user_id).stream():
-        data = doc.to_dict() or {}
-        data["id"] = data.get("id") or doc.id
-        records.append(data)
+    try:
+        for doc in diagnoses_ref.where("user_id", "==", user_id).stream(timeout=5.0):
+            data = doc.to_dict() or {}
+            data["id"] = data.get("id") or doc.id
+            records.append(data)
+    except Exception:
+        return jsonify({"status": "error", "message": "Firebase service temporarily unavailable"}), 503
+        
     return jsonify({"status": "success", "reports": records})
 
 

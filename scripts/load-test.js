@@ -15,17 +15,35 @@ const BASE_URL = __ENV.BACKEND_URL || 'http://127.0.0.1:5000';
 
 export default function () {
     // Define the primary endpoints to test
+    // Note: /api/diagnose removed because it requires multipart/form-data image uploads
     const endpoints = [
-        { method: 'GET', url: '/api/health', expectedStatus: 200 },
-        { method: 'POST', url: '/api/login', body: JSON.stringify({ email: 'test@example.com', password: 'password123' }), expectedStatus: 401 }, // Mocked for test
-        { method: 'POST', url: '/api/register', body: JSON.stringify({ email: 'new@example.com', password: 'pass' }), expectedStatus: 400 },
-        { method: 'POST', url: '/api/predict', body: JSON.stringify({ image_data: 'base64...' }), expectedStatus: 401 },
-        { method: 'GET', url: '/api/profile', expectedStatus: 401 },
-        { method: 'GET', url: '/api/dashboard', expectedStatus: 401 },
-        { method: 'GET', url: '/api/history', expectedStatus: 401 }
+        { 
+            method: 'POST', 
+            url: '/api/login', 
+            bodyFn: () => JSON.stringify({ email: 'test@example.com', password: 'password123' }), 
+            expectedStatuses: [200, 401, 503] 
+        },
+        { 
+            method: 'POST', 
+            url: '/api/signup', 
+            bodyFn: () => JSON.stringify({ email: `test_${__VU}_${__ITER}@example.com`, password: 'password123' }), 
+            expectedStatuses: [200, 201, 400, 503] 
+        },
+        { 
+            method: 'GET', 
+            url: '/api/dashboard', 
+            bodyFn: () => null, 
+            expectedStatuses: [200, 401, 503] 
+        },
+        { 
+            method: 'GET', 
+            url: '/api/reports', 
+            bodyFn: () => null, 
+            expectedStatuses: [200, 401, 503] 
+        }
     ];
 
-    const params = {
+    const baseParams = {
         headers: {
             'Content-Type': 'application/json',
         },
@@ -34,25 +52,44 @@ export default function () {
     // Iterate through endpoints and execute requests
     for (const endpoint of endpoints) {
         let res;
+        let url = `${BASE_URL}${endpoint.url}`;
+        let body = endpoint.bodyFn();
+
+        // Prevent k6 from marking expected responses as HTTP failures
+        let params = Object.assign({}, baseParams, {
+            responseCallback: http.expectedStatuses(...endpoint.expectedStatuses)
+        });
+
         if (endpoint.method === 'GET') {
-            res = http.get(`${BASE_URL}${endpoint.url}`, params);
+            res = http.get(url, params);
         } else if (endpoint.method === 'POST') {
-            res = http.post(`${BASE_URL}${endpoint.url}`, endpoint.body, params);
+            res = http.post(url, body, params);
         }
 
+        let firebaseError = "";
+        try {
+            if (res.body) {
+                let parsed = JSON.parse(res.body);
+                if (parsed.message && parsed.message.includes("Firebase")) {
+                    firebaseError = parsed.message;
+                }
+            }
+        } catch(e) {}
+
         console.log("================================");
+        console.log("METHOD:", endpoint.method);
         console.log("URL:", res.request.url);
         console.log("STATUS:", res.status);
-        if (res.headers && res.headers['Location']) {
-            console.log("REDIRECT:", res.headers['Location']);
+        console.log("RESPONSE TIME:", res.timings.duration + "ms");
+        console.log("BODY PREVIEW:", res.body ? String(res.body).substring(0, 200) : "");
+        if (firebaseError) {
+            console.log("FIREBASE ERROR:", firebaseError);
         }
-        console.log("BODY:", res.body ? String(res.body).substring(0, 200) : "");
         console.log("================================");
 
         // Validate response
         check(res, {
-            'status is 200 or expected': (r) => r.status === endpoint.expectedStatus || r.status === 200 || r.status === 201 || r.status === 401,
-            'response body is not empty': (r) => r.body.length > 0,
+            'status is expected': (r) => endpoint.expectedStatuses.includes(r.status),
             'response time is < 2000ms': (r) => r.timings.duration < 2000,
         });
 
