@@ -40,10 +40,12 @@ export default function () {
             res = http.post(`${BASE_URL}${endpoint.url}`, endpoint.body, params);
         }
 
-        console.log(`Request: ${endpoint.method} ${BASE_URL}${endpoint.url} -> ${res.status}`);
-        if (res.body) {
-            console.log(String(res.body).substring(0, 300));
-        }
+        console.log("================================");
+        console.log("URL:", res.request.url);
+        console.log("METHOD:", res.request.method);
+        console.log("STATUS:", res.status);
+        console.log("BODY:", res.body ? String(res.body).substring(0, 200) : "");
+        console.log("================================");
 
         // Validate response
         check(res, {
