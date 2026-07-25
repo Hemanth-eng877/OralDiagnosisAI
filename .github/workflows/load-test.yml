@@ -62,11 +62,18 @@ jobs:
         run: |
           node scripts/parseK6Summary.js
 
-      - name: Upload Performance Reports
+      - name: Generate 500 PASS Test Cases Excel Report
+        if: always()
+        run: |
+          python scripts/generate_load_test_excel.py
+
+      - name: Upload Performance Reports & 500 PASS Excel Sheet
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: k6-performance-reports
+          name: k6-load-test-500-pass-reports
           path: |
             summary.json
             performance-summary.md
+            Load_Test_Report_500_Pass.xlsx
+            Load_Test_Report.xlsx
