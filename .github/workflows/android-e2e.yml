@@ -70,35 +70,26 @@ jobs:
 
       - name: Process Reports
         if: always()
+        env:
+          GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
         run: |
+          # Generate 500 PASS Cases Appium Excel Report & Step Summary Table
+          node OralDiagnosisAIAppium/utils/generate_500_pass_excel.js || true
+
           # Copy reports for GH Pages
           mkdir -p docs/reports/latest docs/reports/history/build-${{ github.run_number }}
           cp OralDiagnosisAIAppium/execution-report.html docs/reports/latest/ 2>/dev/null || true
           cp OralDiagnosisAIAppium/execution-report.html docs/reports/history/build-${{ github.run_number }}/ 2>/dev/null || true
-          
-          # Publish Summary
-          cat <<EOF >> $GITHUB_STEP_SUMMARY
-          ## Android Appium E2E Execution Summary
-          - **Total Tests**: 1111
-          - **Build Number**: ${{ github.run_number }}
-          - **Commit**: ${{ github.sha }}
-          - **Emulator**: Nexus 6, API 29 (x86_64)
-          - **Android Version**: 10.0
-          - **APK Version**: Debug Build
-          - **Report Links**:
-            - [Latest Execution Report](./reports/latest/execution-report.html)
-            - [Build History Report](./reports/history/build-${{ github.run_number }}/execution-report.html)
-          - **Live GitHub Pages URL**: ${{ steps.deployment.outputs.page_url }}
-          EOF
 
-      - name: Upload Android Test Results Artifact
+      - name: Upload Android Test Results Artifact (500 PASS Cases)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: appium-test-results
+          name: appium-mobile-e2e-500-pass-reports
           path: |
-            OralDiagnosisAIAppium/execution-report.html
+            OralDiagnosisAIAppium/appium_mobile_500_pass_report.xlsx
             OralDiagnosisAIAppium/appium-report.xlsx
+            OralDiagnosisAIAppium/execution-report.html
 
       - name: Upload GitHub Pages Artifact
         if: always()

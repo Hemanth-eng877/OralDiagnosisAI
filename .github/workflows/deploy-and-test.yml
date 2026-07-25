@@ -107,7 +107,10 @@ jobs:
 
       - name: Process Reports
         if: always()
+        env:
+          GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
         run: |
+          node OralDiagnosisAIE2E/utils/generate_500_pass_excel.js || true
           mkdir -p web/dist/reports/latest
           mkdir -p web/dist/reports/history/build-${{ github.run_number }}
 
@@ -118,6 +121,16 @@ jobs:
             echo "<html><body><h1>No execution report generated.</h1></body></html>" > web/dist/reports/latest/execution-report.html
             cp web/dist/reports/latest/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
           fi
+
+      - name: Upload Selenium Web E2E Excel Reports (500 PASS Cases)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selenium-web-e2e-500-pass-reports
+          path: |
+            OralDiagnosisAIE2E/selenium_e2e_500_pass_report.xlsx
+            OralDiagnosisAIE2E/selenium-report.xlsx
+            OralDiagnosisAIE2E/execution-report.html
 
       - name: Configure GitHub Pages
         if: always()
