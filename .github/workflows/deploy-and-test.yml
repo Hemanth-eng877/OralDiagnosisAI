@@ -13,15 +13,17 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
   e2e-and-deploy:
+    runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,79 +31,111 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            OralDiagnosisAIE2E/package-lock.json
 
-      - name: Install Frontend Dependencies & Build
-        working-directory: ./web
+      - name: Install Frontend Dependencies
+        working-directory: web
         run: |
-          npm install
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build Frontend
+        working-directory: web
+        run: |
           npm run build
           mkdir -p dist/reports/latest
           mkdir -p dist/reports/history/build-${{ github.run_number }}
 
       - name: Start Vite Preview Server
-        working-directory: ./web
+        working-directory: web
         run: |
-          npx vite preview --port 5173 --host 127.0.0.1 &
-          echo "Waiting for Vite server to start..."
-          sleep 5
-          curl -sSf http://127.0.0.1:5173 > /dev/null || (echo "Server failed to start" && exit 1)
+          npx vite preview --host 127.0.0.1 --port 5173 &
+          sleep 10
+          curl -f http://127.0.0.1:5173
           echo "TEST_BASE_URL=http://127.0.0.1:5173" >> $GITHUB_ENV
 
-      - name: Setup Chrome for Selenium
+      - name: Setup Chrome
         uses: browser-actions/setup-chrome@v1
-        with:
-          chrome-version: stable
 
       - name: Install E2E Dependencies
         working-directory: ./OralDiagnosisAIE2E
-        run: npm install
+        run: |
+          rm -rf node_modules
+          rm -f package-lock.json
+
+          npm install
+
+          echo "Installed binaries:"
+          ls -la node_modules/.bin
+
+          chmod +x node_modules/.bin/mocha || true
+
+          npx mocha --version
 
       - name: Run Selenium E2E Test Suite (1,100 Assertions)
         working-directory: ./OralDiagnosisAIE2E
         env:
+          TEST_BASE_URL: ${{ env.TEST_BASE_URL }}
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: npm test
+        run: |
+          npx mocha tests/mega_web_1100.test.js --timeout 120000
+
+      - name: Verify Generated Reports
+        if: always()
+        working-directory: ./OralDiagnosisAIE2E
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Files:"
+          ls -la
+          echo "Installed binaries:"
+          ls -la node_modules/.bin
+          if [ -f execution-report.html ]; then
+            echo "SUCCESS: execution-report.html found"
+          else
+            echo "ERROR: execution-report.html NOT found"
+          fi
 
       - name: Process Reports
         if: always()
         run: |
-          # Ensure directories exist
           mkdir -p web/dist/reports/latest
           mkdir -p web/dist/reports/history/build-${{ github.run_number }}
-          
-          # Copy HTML Report to Pages dist with fallback if missing
+
           if [ -f OralDiagnosisAIE2E/execution-report.html ]; then
             cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/latest/
             cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
           else
-            echo "<html><body><h2>No execution report was generated.</h2></body></html>" > web/dist/reports/latest/execution-report.html
-            cp web/dist/reports/latest/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
+            cat > web/dist/reports/latest/execution-report.html <<EOF
+            <html>
+            <body>
+            <h1>No execution report generated.</h1>
+            </body>
+            </html>
+            EOF
+
+            cp web/dist/reports/latest/execution-report.html \
+               web/dist/reports/history/build-${{ github.run_number }}/
           fi
-          
-          # Write summary to GitHub step summary
-          cat <<EOF >> $GITHUB_STEP_SUMMARY
-          ## Selenium E2E Execution Summary
-          - **Total Tests**: 1100
-          - **Build Number**: ${{ github.run_number }}
-          - **Commit**: ${{ github.sha }}
-          - **Artifact Links**: 
-            - [Latest Execution Report](./reports/latest/execution-report.html)
-            - [Build History Report](./reports/history/build-${{ github.run_number }}/execution-report.html)
-          - **Live GitHub Pages URL**: ${{ steps.deployment.outputs.page_url }}
-          EOF
 
       - name: Configure GitHub Pages
         if: always()
         uses: actions/configure-pages@v5
 
-      - name: Upload pages artifact
+      - name: Upload Pages Artifact
         if: always()
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./web/dist
+          path: web/dist
 
       - name: Deploy to GitHub Pages
         if: always()
