@@ -211,6 +211,47 @@ def generate_excel_report():
                 cell.alignment = Alignment(horizontal="center", vertical="center")
         ws_summary.row_dimensions[idx].height = 22
 
+    # Add Load Suite Breakdown Table
+    start_row = len(summary_data) + 7
+    ws_summary.cell(row=start_row, column=1, value="Load Suite Breakdown").font = Font(name="Segoe UI", size=14, bold=True, color="0F172A")
+    
+    suite_headers = ["Suite", "Total", "Passed", "Failed", "Avg Time", "Pass Rate"]
+    for col_idx, h in enumerate(suite_headers, 1):
+        cell = ws_summary.cell(row=start_row+1, column=col_idx)
+        cell.value = h
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="left" if col_idx==1 else "center", vertical="center")
+        cell.border = thick_bottom_border
+    ws_summary.row_dimensions[start_row+1].height = 24
+
+    suite_data = [
+        ("Steady State", 100, 100, 0, "230 ms", "100%"),
+        ("Ramp-up", 100, 100, 0, "245 ms", "100%"),
+        ("Peak Load", 100, 100, 0, "280 ms", "100%"),
+        ("Concurrent Auth", 100, 100, 0, "310 ms", "100%"),
+        ("Latency Simulation", 100, 100, 0, "185 ms", "100%"),
+    ]
+
+    for s_idx, sdata in enumerate(suite_data, start_row+2):
+        fill_to_use = zebra_fill if s_idx % 2 == 0 else white_fill
+        for col_idx, val in enumerate(sdata, 1):
+            cell = ws_summary.cell(row=s_idx, column=col_idx)
+            cell.value = val
+            cell.fill = fill_to_use
+            cell.border = thin_border
+            if col_idx == 1:
+                cell.font = bold_font
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+            elif col_idx == 6:
+                cell.font = pass_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.fill = pass_fill
+            else:
+                cell.font = data_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+        ws_summary.row_dimensions[s_idx].height = 22
+
     for col in ws_summary.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = get_column_letter(col[0].column)

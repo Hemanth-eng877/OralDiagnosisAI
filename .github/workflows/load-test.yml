@@ -55,7 +55,7 @@ jobs:
         run: |
           k6 run --summary-export=summary.json scripts/load-test.js
 
-      - name: Parse Summary & Generate GitHub Report
+      - name: k6 Load Test (100 VUs / 1m)
         if: always()
         env:
           GITHUB_STEP_SUMMARY: $GITHUB_STEP_SUMMARY
