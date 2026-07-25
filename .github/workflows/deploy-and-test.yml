@@ -115,16 +115,8 @@ jobs:
             cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/latest/
             cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
           else
-            cat > web/dist/reports/latest/execution-report.html <<EOF
-            <html>
-            <body>
-            <h1>No execution report generated.</h1>
-            </body>
-            </html>
-            EOF
-
-            cp web/dist/reports/latest/execution-report.html \
-               web/dist/reports/history/build-${{ github.run_number }}/
+            echo "<html><body><h1>No execution report generated.</h1></body></html>" > web/dist/reports/latest/execution-report.html
+            cp web/dist/reports/latest/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
           fi
 
       - name: Configure GitHub Pages
