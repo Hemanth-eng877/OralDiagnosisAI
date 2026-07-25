@@ -29,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Install Frontend Dependencies & Build
         working-directory: ./web
@@ -72,9 +72,14 @@ jobs:
           mkdir -p web/dist/reports/latest
           mkdir -p web/dist/reports/history/build-${{ github.run_number }}
           
-          # Copy HTML Report to Pages dist
-          cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/latest/
-          cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
+          # Copy HTML Report to Pages dist with fallback if missing
+          if [ -f OralDiagnosisAIE2E/execution-report.html ]; then
+            cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/latest/
+            cp OralDiagnosisAIE2E/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
+          else
+            echo "<html><body><h2>No execution report was generated.</h2></body></html>" > web/dist/reports/latest/execution-report.html
+            cp web/dist/reports/latest/execution-report.html web/dist/reports/history/build-${{ github.run_number }}/
+          fi
           
           # Write summary to GitHub step summary
           cat <<EOF >> $GITHUB_STEP_SUMMARY
@@ -87,6 +92,10 @@ jobs:
             - [Build History Report](./reports/history/build-${{ github.run_number }}/execution-report.html)
           - **Live GitHub Pages URL**: ${{ steps.deployment.outputs.page_url }}
           EOF
+
+      - name: Configure GitHub Pages
+        if: always()
+        uses: actions/configure-pages@v5
 
       - name: Upload pages artifact
         if: always()

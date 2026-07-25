@@ -1,7 +1,27 @@
 const fs = require('fs');
 const path = require('path');
 
-function generateHTMLReport(results, buildInfo = {}) {
+function generateHTMLReport(results = [], buildInfo = {}) {
+    const outputDir = path.join(__dirname, '..');
+    if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+    }
+    const outputPath = path.join(outputDir, 'execution-report.html');
+
+    if (!Array.isArray(results) || results.length === 0) {
+        const fallbackHtml = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Execution Report - Failed</title></head>
+<body style="font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; padding: 40px;">
+    <h1 style="color: #f44336;">Test Execution Incomplete or Failed</h1>
+    <p>No test results were recorded. An error occurred during initial setup, browser launch, or test suite execution before test assertions could be evaluated.</p>
+</body>
+</html>`;
+        fs.writeFileSync(outputPath, fallbackHtml, 'utf8');
+        console.log(`Minimal HTML failure report generated at: ${outputPath}`);
+        return;
+    }
+
     let passedCount = 0;
     let failedCount = 0;
     let totalTime = 0;
@@ -92,26 +112,25 @@ function generateHTMLReport(results, buildInfo = {}) {
                 let barClass = 'progress-bar';
                 if (rate < 100 && rate >= 80) barClass += ' warning';
                 if (rate < 80) barClass += ' danger';
-                return \`
+                return `
                 <tr>
-                    <td>\${cat}</td>
-                    <td>\${stats.total}</td>
-                    <td class="status-Passed">\${stats.passed}</td>
-                    <td class="\${stats.failed > 0 ? 'status-Failed' : ''}">\${stats.failed}</td>
+                    <td>${cat}</td>
+                    <td>${stats.total}</td>
+                    <td class="status-Passed">${stats.passed}</td>
+                    <td class="${stats.failed > 0 ? 'status-Failed' : ''}">${stats.failed}</td>
                     <td>
-                        \${rate}%
-                        <div class="progress-container"><div class="\${barClass}" style="width: \${rate}%;"></div></div>
+                        ${rate}%
+                        <div class="progress-container"><div class="${barClass}" style="width: ${rate}%;"></div></div>
                     </td>
-                </tr>\`;
+                </tr>`;
             }).join('')}
         </table>
     </body>
     </html>
-    \`;
+    `;
 
-    const outputPath = path.join(__dirname, '..', 'execution-report.html');
     fs.writeFileSync(outputPath, html, 'utf8');
-    console.log(\`HTML report generated at: \${outputPath}\`);
+    console.log(`HTML report generated at: ${outputPath}`);
 }
 
 module.exports = { generateHTMLReport };

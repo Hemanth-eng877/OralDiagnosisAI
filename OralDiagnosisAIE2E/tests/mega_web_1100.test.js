@@ -52,18 +52,30 @@ describe('OralDiagnosisAI E2E Test Suite', function() {
     });
 
     after(async function() {
-        if (driver) {
-            await driver.quit();
+        try {
+            if (driver) {
+                await driver.quit();
+            }
+        } catch (e) {
+            console.error('Error closing driver:', e.message);
         }
         
         // Generate Reports
         console.log('Generating Excel and HTML reports...');
-        await generateExcelReport(testResults);
-        generateHTMLReport(testResults, {
-            repo: process.env.GITHUB_REPOSITORY,
-            buildNumber: process.env.GITHUB_RUN_NUMBER,
-            commit: process.env.GITHUB_SHA
-        });
+        try {
+            await generateExcelReport(testResults);
+        } catch (e) {
+            console.error('Error generating Excel report:', e.message);
+        }
+        try {
+            generateHTMLReport(testResults, {
+                repo: process.env.GITHUB_REPOSITORY,
+                buildNumber: process.env.GITHUB_RUN_NUMBER,
+                commit: process.env.GITHUB_SHA
+            });
+        } catch (e) {
+            console.error('Error generating HTML report:', e.message);
+        }
     });
 
     // Generate exactly 110 categories
