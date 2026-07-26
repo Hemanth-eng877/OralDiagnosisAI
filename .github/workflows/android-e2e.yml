@@ -56,7 +56,7 @@ jobs:
 
       - name: Upload Android Test Results Artifact (500 PASS Cases)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: appium-mobile-e2e-500-pass-reports
           path: |
