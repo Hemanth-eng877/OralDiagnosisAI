@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "firebase": "^12.16.0",
-    "protobufjs": "^7.5.5",
+    "protobufjs": "^7.6.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
