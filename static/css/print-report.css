@@ -1,0 +1,5 @@
+/* Print Stylesheet for Official Diagnostic Reports */
+@media print {
+  .navbar, .btn, footer { display: none !important; }
+  body { font-size: 12pt; color: #000; }
+}
