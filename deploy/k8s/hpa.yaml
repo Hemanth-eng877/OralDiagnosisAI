@@ -1,0 +1,8 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: oraldiagnosis-hpa
+  namespace: oraldiagnosis-ai
+spec:
+  maxReplicas: 10
+  minReplicas: 2
