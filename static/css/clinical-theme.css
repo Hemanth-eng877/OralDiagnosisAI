@@ -1,0 +1,7 @@
+/* Clinical Healthcare Theme Additions */
+:root {
+  --hospital-blue: #0284c7;
+  --accent-emerald: #10b981;
+  --danger-crimson: #dc2626;
+}
+.clinical-card { border-radius: 8px; border: 1px solid #e2e8f0; }
