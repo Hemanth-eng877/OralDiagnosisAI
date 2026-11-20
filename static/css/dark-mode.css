@@ -1,0 +1,4 @@
+/* High Contrast Clinical Dark Mode */
+@media (prefers-color-scheme: dark) {
+  body.auto-dark { background-color: #0f172a; color: #f8fafc; }
+}
