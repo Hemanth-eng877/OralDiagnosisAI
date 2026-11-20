@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oraldiagnosis-config
+  namespace: oraldiagnosis-ai
+data:
+  FLASK_ENV: production
+  MAX_CONTENT_LENGTH: '8388608'
