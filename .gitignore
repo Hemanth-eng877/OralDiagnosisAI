@@ -1,9 +1,48 @@
+# Python
 venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
 
-uploads/
-
+# Sensitive credentials & environment
 firebase-key.json
-
 .env
+.env.local
+*.pem
+*.key
+android/app/google-services.json
+android/app/google-services .json
+
+# Uploads & local storage
+uploads/*
+!uploads/.gitkeep
+database.db
+
+# Android build outputs & caches
+android/.gradle/
+android/build/
+android/app/build/
+android/.idea/
+android/*.iml
+android/app/*.iml
+android/local.properties
+android/.externalNativeBuild/
+android/.cxx/
+
+# Node & Web frontend
+web/node_modules/
+web/dist/
+OralDiagnosisAIE2E/node_modules/
+OralDiagnosisAIAppium/node_modules/
+
+# OS and IDE temporary files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+.vscode/
