@@ -7,26 +7,23 @@ import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.Query;
 import com.oraldiagnosis.ai.firebase.FirebaseManager;
 import com.oraldiagnosis.ai.models.ReportItem;
 import com.oraldiagnosis.ai.models.ReportResponse;
-import com.oraldiagnosis.ai.repository.AppRepository;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
-
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
+import java.util.Locale;
 
 public class ReportViewModel extends AndroidViewModel {
-    private AppRepository repository;
     private MutableLiveData<ReportResponse> reportsData = new MutableLiveData<>();
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
 
     public ReportViewModel(@NonNull Application application) {
         super(application);
-        repository = new AppRepository(application);
         FirebaseManager.init(application);
     }
 
@@ -39,63 +36,43 @@ public class ReportViewModel extends AndroidViewModel {
     }
 
     public void loadReports(String userId) {
-        // Fetch from shared Firestore 'reports' collection AND Flask REST API
-        FirebaseManager.getFirestore().collection("reports")
-                .get()
-                .addOnSuccessListener(querySnap -> {
-                    List<ReportItem> firestoreReports = new ArrayList<>();
-                    for (DocumentSnapshot doc : querySnap.getDocuments()) {
-                        String patientId = doc.getString("patientId") != null ? doc.getString("patientId") : doc.getString("patient_id");
-                        String patientName = doc.getString("patientName") != null ? doc.getString("patientName") : doc.getString("patient_name");
-                        String diagnosis = doc.getString("diagnosis");
-                        Double confDouble = doc.getDouble("confidence");
-                        float confidence = confDouble != null ? confDouble.floatValue() : 0.0f;
-                        String date = doc.getString("date") != null ? doc.getString("date") : (doc.get("createdAt") != null ? doc.get("createdAt").toString() : "");
-
-                        firestoreReports.add(new ReportItem(doc.getId(), patientId, patientName, null, "", doc.getString("image_filename"), diagnosis, confidence, date));
+        FirebaseManager.getFirestore().collection("diagnosis_records")
+                .whereEqualTo("user_id", userId)
+                .addSnapshotListener((querySnap, error) -> {
+                    if (error != null) {
+                        errorMessage.setValue("Failed to load diagnosis reports: " + error.getMessage());
+                        return;
                     }
-
-                    // Merge with REST API results
-                    repository.getApiService().getReports(userId).enqueue(new Callback<ReportResponse>() {
-                        @Override
-                        public void onResponse(Call<ReportResponse> call, Response<ReportResponse> response) {
-                            if (response.isSuccessful() && response.body() != null && response.body().reports != null) {
-                                for (ReportItem restR : response.body().reports) {
-                                    boolean exists = false;
-                                    for (ReportItem fr : firestoreReports) {
-                                        if (fr.id != null && fr.id.equals(restR.id)) {
-                                            exists = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!exists) firestoreReports.add(restR);
-                                }
+                    if (querySnap != null) {
+                        List<DocumentSnapshot> docs = new ArrayList<>(querySnap.getDocuments());
+                        docs.sort((d1, d2) -> {
+                            Date date1 = d1.getDate("created_at");
+                            Date date2 = d2.getDate("created_at");
+                            if (date1 == null && date2 == null) return 0;
+                            if (date1 == null) return 1;
+                            if (date2 == null) return -1;
+                            return date2.compareTo(date1);
+                        });
+                        
+                        List<ReportItem> firestoreReports = new ArrayList<>();
+                        for (DocumentSnapshot doc : docs) {
+                            String patientId = doc.getString("patient_id");
+                            String patientName = doc.getString("patient_name");
+                            String diagnosis = doc.getString("diagnosis");
+                            Double confDouble = doc.getDouble("confidence");
+                            float confidence = confDouble != null ? confDouble.floatValue() : 0.0f;
+                            
+                            String date = "";
+                            if (doc.getTimestamp("created_at") != null) {
+                                Date d = doc.getTimestamp("created_at").toDate();
+                                SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+                                date = sdf.format(d);
                             }
-                            reportsData.setValue(new ReportResponse("success", firestoreReports));
-                        }
 
-                        @Override
-                        public void onFailure(Call<ReportResponse> call, Throwable t) {
-                            reportsData.setValue(new ReportResponse("success", firestoreReports));
+                            firestoreReports.add(new ReportItem(doc.getId(), patientId, patientName, null, "", doc.getString("image_filename"), diagnosis, confidence, date));
                         }
-                    });
-                })
-                .addOnFailureListener(e -> {
-                    repository.getApiService().getReports(userId).enqueue(new Callback<ReportResponse>() {
-                        @Override
-                        public void onResponse(Call<ReportResponse> call, Response<ReportResponse> response) {
-                            if (response.isSuccessful() && response.body() != null) {
-                                reportsData.setValue(response.body());
-                            } else {
-                                errorMessage.setValue("Failed to load diagnosis reports.");
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<ReportResponse> call, Throwable t) {
-                            errorMessage.setValue("Network error: " + t.getMessage());
-                        }
-                    });
+                        reportsData.setValue(new ReportResponse("success", firestoreReports));
+                    }
                 });
     }
 }

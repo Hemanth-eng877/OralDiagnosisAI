@@ -2,45 +2,34 @@ package com.oraldiagnosis.ai.viewmodels;
 
 import android.app.Application;
 import android.graphics.Bitmap;
-import android.net.Uri;
+import android.graphics.BitmapFactory;
 import androidx.annotation.NonNull;
 import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
 import com.google.firebase.firestore.FieldValue;
-import com.google.firebase.storage.StorageReference;
-import com.oraldiagnosis.ai.firebase.FirebaseManager;
+import com.google.firebase.firestore.FirebaseFirestore;
 import com.oraldiagnosis.ai.models.DiagnosisResponse;
-import com.oraldiagnosis.ai.repository.AppRepository;
-import com.oraldiagnosis.ai.tflite.TFLiteHelper;
+import com.oraldiagnosis.ai.tflite.TFLiteInferenceManager;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.RequestBody;
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class PredictionViewModel extends AndroidViewModel {
-    private AppRepository repository;
-    private MutableLiveData<TFLiteHelper.PredictionResult> localPredictionResult = new MutableLiveData<>();
     private MutableLiveData<DiagnosisResponse> uploadResult = new MutableLiveData<>();
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
+    private FirebaseFirestore db;
+    private ExecutorService executorService;
 
     public PredictionViewModel(@NonNull Application application) {
         super(application);
-        repository = new AppRepository(application);
-        FirebaseManager.init(application);
-    }
-
-    public LiveData<TFLiteHelper.PredictionResult> getLocalPredictionResult() {
-        return localPredictionResult;
+        db = FirebaseFirestore.getInstance();
+        executorService = Executors.newSingleThreadExecutor();
     }
 
     public LiveData<DiagnosisResponse> getUploadResult() {
@@ -51,78 +40,89 @@ public class PredictionViewModel extends AndroidViewModel {
         return errorMessage;
     }
 
-    public void runLocalPrediction(Bitmap bitmap) {
-        try {
-            TFLiteHelper tfLiteHelper = new TFLiteHelper(getApplication());
-            TFLiteHelper.PredictionResult result = tfLiteHelper.predict(bitmap);
-            tfLiteHelper.close();
-            localPredictionResult.setValue(result);
-        } catch (IOException e) {
-            errorMessage.setValue("Failed to run on-device AI inference: " + e.getMessage());
-        }
-    }
+
 
     public void uploadDiagnosisToServer(String userId, String patientId, File imageFile) {
-        // 1. Upload to Flask REST endpoint
-        RequestBody userReq = RequestBody.create(MediaType.parse("text/plain"), userId);
-        RequestBody patientReq = RequestBody.create(MediaType.parse("text/plain"), patientId);
-        RequestBody imageReq = RequestBody.create(MediaType.parse("image/*"), imageFile);
-        MultipartBody.Part imagePart = MultipartBody.Part.createFormData("image", imageFile.getName(), imageReq);
+        executorService.execute(() -> {
+            TFLiteInferenceManager inferenceManager = null;
+            try {
+                // 1. Load Bitmap
+                Bitmap bitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
+                if (bitmap == null) {
+                    DiagnosisResponse err = new DiagnosisResponse("invalid_image", null, 0.0f, null);
+                    err.message = "Failed to load image";
+                    uploadResult.postValue(err);
+                    return;
+                }
 
-        repository.getApiService().diagnose(userReq, patientReq, imagePart).enqueue(new Callback<DiagnosisResponse>() {
-            @Override
-            public void onResponse(Call<DiagnosisResponse> call, Response<DiagnosisResponse> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    uploadResult.setValue(response.body());
-                } else {
-                    mirrorDiagnosisToFirebaseOnly(userId, patientId, imageFile);
+                // 2. Initialize TFLite Inference Manager
+                inferenceManager = new TFLiteInferenceManager(getApplication(), "oral_model.tflite");
+                TFLiteInferenceManager.PredictionResult result = inferenceManager.predict(bitmap);
+
+                if (result.confidence < 90.0f) {
+                    DiagnosisResponse err = new DiagnosisResponse("invalid_image", null, 0.0f, null);
+                    err.message = "Please upload a valid microscopic oral cytology image.";
+                    uploadResult.postValue(err);
+                    return;
+                }
+
+                // 3. Get patient name from Firestore
+                db.collection("patients").document(patientId).get().addOnSuccessListener(documentSnapshot -> {
+                    String patientName = documentSnapshot.getString("full_name");
+                    if (patientName == null) patientName = "Unknown";
+                    
+                    // 4. Save result to Firestore
+                    saveToFirestore(userId, patientId, patientName, imageFile.getName(), result.label, result.confidence);
+                }).addOnFailureListener(e -> {
+                    DiagnosisResponse err = new DiagnosisResponse("error", null, 0.0f, null);
+                    err.message = "Failed to fetch patient details";
+                    uploadResult.postValue(err);
+                });
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                // If model loading or inference fails, display: "Unable to load AI model."
+                errorMessage.postValue("Unable to load AI model.");
+            } finally {
+                if (inferenceManager != null) {
+                    inferenceManager.close();
                 }
             }
-
-            @Override
-            public void onFailure(Call<DiagnosisResponse> call, Throwable t) {
-                mirrorDiagnosisToFirebaseOnly(userId, patientId, imageFile);
-            }
         });
-
-        // 2. Also mirror to shared Firebase Storage and Firestore collections (scans / reports) right away
-        mirrorDiagnosisToFirebaseOnly(userId, patientId, imageFile);
     }
 
-    private void mirrorDiagnosisToFirebaseOnly(String userId, String patientId, File imageFile) {
-        try {
-            TFLiteHelper.PredictionResult currentResult = localPredictionResult.getValue();
-            String diagnosis = currentResult != null ? currentResult.label : "Reviewed";
-            float confidence = currentResult != null ? currentResult.confidence : 95.0f;
+    private void saveToFirestore(String userId, String patientId, String patientName, String originalFilename, String diagnosis, float confidence) {
+        String uniqueFilename = UUID.randomUUID().toString().replace("-", "") + "_" + originalFilename;
+        String documentId = db.collection("diagnosis_records").document().getId();
 
-            // Upload image to Firebase Storage if possible
-            StorageReference storageRef = FirebaseManager.getStorage().getReference("scans/" + imageFile.getName());
-            storageRef.putFile(Uri.fromFile(imageFile))
-                    .addOnSuccessListener(taskSnapshot -> storageRef.getDownloadUrl().addOnSuccessListener(uri -> {
-                        saveFirestoreReport(userId, patientId, diagnosis, confidence, uri.toString());
-                    }))
-                    .addOnFailureListener(e -> {
-                        saveFirestoreReport(userId, patientId, diagnosis, confidence, imageFile.getName());
-                    });
-        } catch (Exception ignored) {}
+        Map<String, Object> data = new HashMap<>();
+        data.put("id", documentId);
+        data.put("uid", userId);
+        data.put("user_id", userId);
+        data.put("patient_id", patientId);
+        data.put("patient_name", patientName);
+        data.put("image_filename", uniqueFilename);
+        data.put("image_path", uniqueFilename);
+        data.put("diagnosis", diagnosis);
+        data.put("confidence", confidence);
+        data.put("created_at", FieldValue.serverTimestamp());
+
+        db.collection("diagnosis_records").document(documentId).set(data)
+                .addOnSuccessListener(aVoid -> {
+                    uploadResult.postValue(new DiagnosisResponse("success", diagnosis, confidence, uniqueFilename));
+                })
+                .addOnFailureListener(e -> {
+                    DiagnosisResponse err = new DiagnosisResponse("error", null, 0.0f, null);
+                    err.message = "Cloud upload failed";
+                    uploadResult.postValue(err);
+                });
     }
 
-    private void saveFirestoreReport(String userId, String patientId, String diagnosis, float confidence, String imageUrl) {
-        Map<String, Object> reportData = new HashMap<>();
-        reportData.put("userId", userId);
-        reportData.put("patientId", patientId);
-        reportData.put("patient_id", patientId);
-        reportData.put("diagnosis", diagnosis);
-        reportData.put("confidence", confidence);
-        reportData.put("imageUrl", imageUrl);
-        reportData.put("image_filename", imageUrl);
-        reportData.put("createdAt", FieldValue.serverTimestamp());
-        reportData.put("date", java.text.DateFormat.getDateInstance().format(new java.util.Date()));
-
-        FirebaseManager.getFirestore().collection("reports").add(reportData);
-        FirebaseManager.getFirestore().collection("diagnosis_records").add(reportData);
-        if (uploadResult.getValue() == null) {
-            uploadResult.postValue(new DiagnosisResponse("success", diagnosis, confidence, imageUrl));
+    @Override
+    protected void onCleared() {
+        super.onCleared();
+        if (executorService != null) {
+            executorService.shutdown();
         }
     }
 }
