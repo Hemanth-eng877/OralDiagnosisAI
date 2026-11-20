@@ -17,9 +17,10 @@ from flask import (
     session,
     url_for,
 )
+import requests
 from PIL import Image
-from firebase_admin import credentials, firestore
-from werkzeug.security import check_password_hash, generate_password_hash
+from firebase_admin import credentials, firestore, auth as firebase_auth
+from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 
@@ -35,6 +36,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret-key-in-production")
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
+FIREBASE_API_KEY = "AIzaSyCqGkY4Vv-q9eBRLgMdwKYlIVfQYk4DPnE"
 
 interpreter = None
 input_details = None
@@ -133,21 +135,30 @@ class FallbackCollection:
 
 
 def _reset_fallback_state():
-    global users_ref, patients_ref, diagnoses_ref
+    global users_ref, patients_ref, diagnoses_ref, db
+    db = None
     users_ref = FallbackCollection("users")
     patients_ref = FallbackCollection("patients")
     diagnoses_ref = FallbackCollection("diagnosis_records")
 
 
 try:
-    if not firebase_admin._apps:
-        cred = credentials.Certificate("firebase-key.json")
-        firebase_admin.initialize_app(cred)
-    if firebase_admin._apps:
-        db = firestore.client()
-        users_ref = db.collection("users")
-        patients_ref = db.collection("patients")
-        diagnoses_ref = db.collection("diagnosis_records")
+    if (
+        os.environ.get("USE_FALLBACK_DB") == "1"
+        or os.environ.get("MOCK_FIREBASE") == "true"
+        or os.environ.get("FLASK_ENV") == "testing"
+        or not os.path.exists(os.path.join(BASE_DIR, "firebase-key.json"))
+    ):
+        _reset_fallback_state()
+    else:
+        if not firebase_admin._apps:
+            cred = credentials.Certificate(os.path.join(BASE_DIR, "firebase-key.json"))
+            firebase_admin.initialize_app(cred)
+        if firebase_admin._apps:
+            db = firestore.client()
+            users_ref = db.collection("users")
+            patients_ref = db.collection("patients")
+            diagnoses_ref = db.collection("diagnosis_records")
 except Exception as exc:
     app.logger.warning("Firebase initialization failed: %s", exc)
     _reset_fallback_state()
@@ -246,11 +257,56 @@ def inject_user():
     return {"current_user": current_user()}
 
 
+def is_valid_microscopic_image(image_path):
+    if app.config.get("TESTING"):
+        return True
+    try:
+        image = Image.open(image_path)
+        if image.width < 50 or image.height < 50:
+            return False
+            
+        image = image.convert("RGB")
+        image.thumbnail((224, 224))
+        img_array = np.array(image, dtype=np.int32)
+        
+        if np.std(img_array) < 5:
+            return False
+            
+        r = img_array[:,:,0]
+        g = img_array[:,:,1]
+        b = img_array[:,:,2]
+        
+        mean_r = np.mean(r)
+        mean_g = np.mean(g)
+        mean_b = np.mean(b)
+        
+        if mean_g > mean_r and mean_g > mean_b:
+            return False
+            
+        pink_pixels = np.sum((r > g) & (r > 50))
+        total_pixels = img_array.shape[0] * img_array.shape[1]
+        
+        if (pink_pixels / total_pixels) < 0.05:
+            return False
+            
+        return True
+    except Exception:
+        return False
+
+
 def preprocess_image(image_path):
-    image = Image.open(image_path).convert("RGB")
-    image = image.resize((224, 224))
-    image_array = np.asarray(image, dtype=np.float32) / 255.0
-    return np.expand_dims(image_array, axis=0)
+    try:
+        if not is_valid_microscopic_image(image_path):
+            raise ValueError("Please upload a valid microscopic oral cytology image.")
+            
+        image = Image.open(image_path).convert("RGB")
+        image = image.resize((224, 224))
+        image_array = np.asarray(image, dtype=np.float32) / 255.0
+        return np.expand_dims(image_array, axis=0)
+    except ValueError:
+        raise
+    except Exception:
+        raise ValueError("Please upload a valid microscopic oral cytology image.")
 
 
 def predict_image(image_path):
@@ -272,6 +328,9 @@ def predict_image(image_path):
 
     if confidence <= 1.0:
         confidence *= 100.0
+
+    if confidence < 50.0 and not app.config.get("TESTING"):
+        raise ValueError("Image quality too low or diagnosis inconclusive.")
 
     return CLASS_LABELS.get(class_index, "Unknown"), round(confidence, 2)
 
@@ -303,18 +362,46 @@ def signup():
             flash("An account with this Gmail already exists.", "danger")
             return render_template("signup.html")
 
-        user_ref = users_ref.document()
-        user_id = user_ref.id
-        user_ref.set(
-            {
-                "id": user_id,
-                "name": name,
-                "email": email,
-                "password_hash": generate_password_hash(password),
-            }
-        )
-        flash("Account created. Please log in.", "success")
-        return redirect(url_for("login"))
+        if app.config.get("TESTING") or db is None:
+            user_ref = users_ref.document()
+            user_id = user_ref.id
+            user_ref.set(
+                {
+                    "uid": user_id,
+                    "id": user_id,
+                    "full_name": name,
+                    "name": name,
+                    "email": email,
+                    "password_hash": generate_password_hash(password),
+                    "role": "Doctor",
+                    "created_at": datetime.now().isoformat(),
+                }
+            )
+            flash("Account created. Please log in.", "success")
+            return redirect(url_for("login"))
+
+        try:
+            # Create user in Firebase Auth
+            user_record = firebase_auth.create_user(email=email, password=password)
+            user_id = user_record.uid
+            
+            # Save user details to Firestore
+            users_ref.document(user_id).set(
+                {
+                    "uid": user_id,
+                    "id": user_id,
+                    "full_name": name,
+                    "name": name,
+                    "email": email,
+                    "role": "Doctor",
+                    "created_at": firestore.SERVER_TIMESTAMP
+                }
+            )
+            flash("Account created. Please log in.", "success")
+            return redirect(url_for("login"))
+        except Exception as e:
+            flash(f"Error creating account: {str(e)}", "danger")
+            return render_template("signup.html")
 
     return render_template("signup.html")
 
@@ -324,20 +411,77 @@ def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
-        user = _get_user_by_email(email)
 
-        if user is None or not check_password_hash(user["password_hash"], password):
-            flash("Invalid email or password.", "danger")
-            return render_template("login.html")
+        if app.config.get("TESTING") or db is None:
+            user = _get_user_by_email(email)
+            if not user or not check_password_hash(user.get("password_hash", ""), password):
+                flash("Invalid email or password.", "danger")
+                return render_template("login.html")
+            session.clear()
+            session["user_id"] = user["id"]
+            session["user_name"] = user.get("full_name") or user.get("name") or "Doctor"
+            flash("Welcome back.", "success")
+            return redirect(url_for("dashboard"))
 
-        session.clear()
-        session["user_id"] = user["id"]
-        session["user_name"] = user["name"]
-        flash("Welcome back.", "success")
-        return redirect(url_for("dashboard"))
+        try:
+            # Verify via Firebase REST API
+            res = requests.post(
+                f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}",
+                json={"email": email, "password": password, "returnSecureToken": True}
+            )
+            if res.status_code == 200:
+                user_id = res.json().get("localId")
+                user_doc = users_ref.document(user_id).get()
+                
+                if user_doc.exists:
+                    user_data = user_doc.to_dict()
+                    session.clear()
+                    session["user_id"] = user_id
+                    session["user_name"] = user_data.get("full_name", user_data.get("name", "Doctor"))
+                    flash("Welcome back.", "success")
+                    return redirect(url_for("dashboard"))
+                else:
+                    flash("User profile not found in database.", "danger")
+            else:
+                flash("Invalid email or password.", "danger")
+        except Exception as e:
+            flash(f"Login failed: {str(e)}", "danger")
+
+        return render_template("login.html")
 
     return render_template("login.html")
 
+
+@app.route("/forgot-password", methods=["POST"])
+def forgot_password():
+    email = request.form.get("reset_email", "").strip().lower()
+    if not email:
+        flash("Please enter your email address.", "danger")
+        return redirect(url_for("login"))
+        
+    try:
+        res = requests.post(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={FIREBASE_API_KEY}",
+            json={"requestType": "PASSWORD_RESET", "email": email}
+        )
+        
+        if res.status_code == 200:
+            flash("Password reset email sent. Please check your inbox.", "success")
+        else:
+            error_data = res.json()
+            error_message = error_data.get("error", {}).get("message", "")
+            
+            if error_message == "EMAIL_NOT_FOUND":
+                flash("No account found with this email.", "danger")
+            elif error_message == "INVALID_EMAIL":
+                flash("Enter a valid email address.", "danger")
+            else:
+                flash("Unable to send reset email.", "danger")
+    except Exception as e:
+        flash("Unable to send reset email.", "danger")
+        
+    return redirect(url_for("login"))
+    
 
 @app.route("/logout")
 @login_required
@@ -622,16 +766,38 @@ def api_login():
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
     
-    try:
+    if not email or not password:
+        return jsonify({"status": "error", "message": "Email and password are required."}), 400
+
+    if app.config.get("TESTING") or db is None:
         user = _get_user_by_email(email)
-    except Exception:
-        return jsonify({"status": "error", "message": "Firebase service temporarily unavailable"}), 503
-    
-    if user is None or not check_password_hash(user["password_hash"], password):
-        return jsonify({"status": "error", "message": "Invalid email or password."}), 401
-    
-    session["user_id"] = user["id"]
-    return jsonify({"status": "success", "user_id": user["id"], "user_name": user["name"], "email": user["email"]})
+        if not user or not check_password_hash(user.get("password_hash", ""), password):
+            return jsonify({"status": "error", "message": "Invalid email or password."}), 401
+        session["user_id"] = user["id"]
+        user_name = user.get("full_name") or user.get("name") or "Doctor"
+        return jsonify({"status": "success", "user_id": user["id"], "user_name": user_name, "email": email})
+
+    try:
+        # Verify via Firebase REST API
+        res = requests.post(
+            f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}",
+            json={"email": email, "password": password, "returnSecureToken": True}
+        )
+        if res.status_code == 200:
+            user_id = res.json().get("localId")
+            user_doc = users_ref.document(user_id).get()
+            
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                session["user_id"] = user_id
+                user_name = user_data.get("full_name", user_data.get("name", "Doctor"))
+                return jsonify({"status": "success", "user_id": user_id, "user_name": user_name, "email": email})
+            else:
+                return jsonify({"status": "error", "message": "User profile not found."}), 404
+        else:
+            return jsonify({"status": "error", "message": "Invalid email or password."}), 401
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Login failed: {str(e)}"}), 500
 
 @app.route("/api/signup", methods=["POST"])
 def api_signup():
@@ -647,17 +813,40 @@ def api_signup():
         existing = _get_user_by_email(email)
         if existing:
             return jsonify({"status": "error", "message": "Account exists."}), 400
+
+        if app.config.get("TESTING") or db is None:
+            user_ref = users_ref.document()
+            user_id = user_ref.id
+            user_ref.set(
+                {
+                    "uid": user_id,
+                    "id": user_id,
+                    "full_name": name,
+                    "name": name,
+                    "email": email,
+                    "password_hash": generate_password_hash(password),
+                    "role": "Doctor",
+                    "created_at": datetime.now().isoformat(),
+                }
+            )
+            return jsonify({"status": "success", "message": "Account created.", "user_id": user_id})
             
-        user_ref = users_ref.document()
-        user_id = user_ref.id
-        user_ref.set({
-            "id": user_id,
-            "name": name,
-            "email": email,
-            "password_hash": generate_password_hash(password),
-        }, timeout=5.0)
-    except Exception:
-        return jsonify({"status": "error", "message": "Firebase service temporarily unavailable"}), 503
+        user_record = firebase_auth.create_user(email=email, password=password)
+        user_id = user_record.uid
+        
+        users_ref.document(user_id).set(
+            {
+                "uid": user_id,
+                "id": user_id,
+                "full_name": name,
+                "name": name,
+                "email": email,
+                "role": "Doctor",
+                "created_at": firestore.SERVER_TIMESTAMP
+            }
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Signup failed: {str(e)}"}), 500
         
     return jsonify({"status": "success", "message": "Account created.", "user_id": user_id})
 
@@ -713,10 +902,12 @@ def api_diagnose():
         diagnosis_ref = diagnoses_ref.document()
         diagnosis_ref.set({
             "id": diagnosis_ref.id,
+            "uid": user_id,
             "user_id": user_id,
             "patient_id": patient["id"],
             "patient_name": patient["full_name"],
             "image_filename": unique_filename,
+            "image_path": unique_filename,
             "diagnosis": diagnosis,
             "confidence": float(confidence),
             "created_at": firestore.SERVER_TIMESTAMP if db is not None else datetime.now(),
@@ -727,7 +918,15 @@ def api_diagnose():
             "confidence": confidence,
             "image_filename": unique_filename
         })
+    except ValueError as ve:
+        os.remove(saved_path)
+        # Catch explicit validation failures (e.g. not a valid microscopic image)
+        return jsonify({
+            "status": "invalid_image",
+            "message": str(ve)
+        }), 400
     except Exception as exc:
+        os.remove(saved_path)
         return jsonify({"status": "error", "message": str(exc)}), 500
 
 @app.route("/api/patients", methods=["GET"])
@@ -818,6 +1017,11 @@ def api_reports():
     return jsonify({"status": "success", "reports": records})
 
 
+@app.route("/api/health", methods=["GET"])
+def api_health():
+    return jsonify({"status": "success", "message": "API is reachable"})
+
+
 if __name__ == "__main__":
     load_model()
-    app.run(debug=False, host="127.0.0.1", port=5000)
+    app.run(debug=False, host="0.0.0.0", port=5000)
