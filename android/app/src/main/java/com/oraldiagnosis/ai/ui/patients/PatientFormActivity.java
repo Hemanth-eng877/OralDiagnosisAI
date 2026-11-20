@@ -37,11 +37,19 @@ public class PatientFormActivity extends AppCompatActivity {
             if (existingPatient.age != null) {
                 binding.etAge.setText(String.valueOf(existingPatient.age));
             }
-            binding.etGender.setText(existingPatient.gender);
+            binding.actvGender.setText(existingPatient.gender, false);
             binding.etPhone.setText(existingPatient.phone);
             binding.etEmail.setText(existingPatient.email);
             binding.etNotes.setText(existingPatient.notes);
         }
+
+        String[] genders = new String[]{"Male", "Female", "Other"};
+        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(
+                this,
+                android.R.layout.simple_dropdown_item_1line,
+                genders
+        );
+        binding.actvGender.setAdapter(adapter);
 
         binding.btnSave.setOnClickListener(v -> {
             String name = binding.etFullName.getText().toString().trim();
@@ -57,7 +65,7 @@ public class PatientFormActivity extends AppCompatActivity {
                     userId,
                     name,
                     age,
-                    binding.etGender.getText().toString().trim(),
+                    binding.actvGender.getText().toString().trim(),
                     binding.etPhone.getText().toString().trim(),
                     binding.etEmail.getText().toString().trim(),
                     binding.etNotes.getText().toString().trim()
