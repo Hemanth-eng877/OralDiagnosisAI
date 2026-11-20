@@ -1,0 +1,5 @@
+name: Dependency Vulnerability Check
+on: [schedule]
+jobs:
+  check:
+    runs-on: ubuntu-latest
