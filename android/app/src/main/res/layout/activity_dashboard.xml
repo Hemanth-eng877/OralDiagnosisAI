@@ -1,148 +1,335 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.drawerlayout.widget.DrawerLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/drawerLayout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:background="#F5F9FF">
 
-    <LinearLayout
+    <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <TextView
-            android:id="@+id/tvWelcome"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:text="Welcome to Dashboard"
-            android:textColor="@color/primary_blue"
-            android:textSize="24sp"
-            android:textStyle="bold" />
+        android:layout_height="match_parent"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:orientation="horizontal">
+            android:orientation="vertical"
+            android:padding="20dp">
 
+            <!-- Header Section -->
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="#E2E8F0"
-                android:orientation="vertical"
-                android:padding="16dp">
-                <TextView
-                    android:layout_width="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="24dp">
+                
+                <ImageButton
+                    android:id="@+id/btnMenu"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@android:drawable/ic_menu_sort_by_size"
+                    app:tint="#1E293B"
+                    android:contentDescription="Menu" />
+                <ImageView
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/oraldiagnosisai_logo"
+                    android:scaleType="fitCenter"
+                    android:contentDescription="App Logo" />
+                
+                <LinearLayout
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Patients"
-                    android:textColor="#475569" />
-                <TextView
-                    android:id="@+id/tvPatientCount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textSize="24sp"
-                    android:textStyle="bold" />
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="OralDiagnosisAI"
+                        android:textColor="@color/primary_blue"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textAllCaps="true" />
+                    <TextView
+                        android:id="@+id/tvWelcome"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Dashboard Overview"
+                        android:textColor="#1E293B"
+                        android:textSize="24sp"
+                        android:textStyle="bold" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Monitor care operations and insights."
+                        android:textColor="#64748B"
+                        android:textSize="14sp" />
+                </LinearLayout>
             </LinearLayout>
 
-            <View
-                android:layout_width="16dp"
-                android:layout_height="match_parent" />
+            <!-- Stats Section -->
+            <GridLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:columnCount="2"
+                android:layout_marginBottom="24dp">
+
+                <!-- Total Patients Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="6dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:cardBackgroundColor="#FFFFFF"
+                    app:strokeWidth="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Total Patients"
+                            android:textColor="#64748B"
+                            android:textSize="14sp" />
+                        <TextView
+                            android:id="@+id/tvPatientCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="0"
+                            android:textColor="#1E293B"
+                            android:textSize="28sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Total Scans Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="6dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:cardBackgroundColor="#FFFFFF"
+                    app:strokeWidth="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Total Scans"
+                            android:textColor="#64748B"
+                            android:textSize="14sp" />
+                        <TextView
+                            android:id="@+id/tvReportCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="0"
+                            android:textColor="#1E293B"
+                            android:textSize="28sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- OSCC Cases Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="6dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:cardBackgroundColor="#FFFFFF"
+                    app:strokeWidth="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="OSCC Cases"
+                            android:textColor="@color/danger_red"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:id="@+id/tvOsccCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="0"
+                            android:textColor="#1E293B"
+                            android:textSize="28sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Normal Cases Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_margin="6dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:cardBackgroundColor="#FFFFFF"
+                    app:strokeWidth="0dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Normal Cases"
+                            android:textColor="@color/accent_emerald"
+                            android:textSize="14sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:id="@+id/tvNormalCount"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="0"
+                            android:textColor="#1E293B"
+                            android:textSize="28sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+            </GridLayout>
+
+            <!-- Actions Section -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Quick Actions"
+                android:textColor="#1E293B"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="12dp" />
 
             <LinearLayout
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:background="#E2E8F0"
                 android:orientation="vertical"
-                android:padding="16dp">
-                <TextView
-                    android:layout_width="wrap_content"
+                android:layout_marginBottom="24dp">
+                
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDiagnose"
+                    android:layout_width="match_parent"
+                    android:layout_height="64dp"
+                    android:layout_marginBottom="12dp"
+                    app:backgroundTint="@color/primary_blue"
+                    android:textColor="@color/white"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="16dp"
+                    app:icon="@android:drawable/ic_menu_camera"
+                    app:iconTint="@color/white"
+                    app:iconGravity="textStart"
+                    android:text="New AI Diagnosis" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Reports"
-                    android:textColor="#475569" />
-                <TextView
-                    android:id="@+id/tvReportCount"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="0"
-                    android:textSize="24sp"
-                    android:textStyle="bold" />
+                    android:orientation="horizontal">
+                    
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPatients"
+                        android:layout_width="0dp"
+                        android:layout_height="64dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        app:backgroundTint="#FFFFFF"
+                        android:textColor="#1E293B"
+                        app:strokeWidth="1dp"
+                        app:strokeColor="#E2E8F0"
+                        app:cornerRadius="16dp"
+                        app:icon="@android:drawable/ic_menu_myplaces"
+                        app:iconTint="@color/primary_blue"
+                        app:iconGravity="textStart"
+                        android:text="Patients" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnHistory"
+                        android:layout_width="0dp"
+                        android:layout_height="64dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        app:backgroundTint="#FFFFFF"
+                        android:textColor="#1E293B"
+                        app:strokeWidth="1dp"
+                        app:strokeColor="#E2E8F0"
+                        app:cornerRadius="16dp"
+                        app:icon="@android:drawable/ic_menu_recent_history"
+                        app:iconTint="@color/primary_blue"
+                        app:iconGravity="textStart"
+                        android:text="Reports" />
+                </LinearLayout>
             </LinearLayout>
+
+            <!-- Recent Reports Section -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+                
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="Recent Activity"
+                    android:textColor="#1E293B"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+                    
+                <Button
+                    android:id="@+id/btnViewAllReports"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/primary_blue"
+                    android:text="View all"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rvRecentReports"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+                
         </LinearLayout>
+    </ScrollView>
 
-        <GridLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:columnCount="2"
-            android:layout_marginBottom="16dp">
+    <com.google.android.material.navigation.NavigationView
+        android:id="@+id/navView"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:layout_gravity="start"
+        android:background="#FFFFFF"
+        app:itemTextColor="#1E293B"
+        app:itemIconTint="#64748B"
+        app:menu="@menu/drawer_menu" />
 
-            <Button
-                android:id="@+id/btnDiagnose"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:backgroundTint="@color/primary_blue"
-                android:text="@string/diagnose" />
-
-            <Button
-                android:id="@+id/btnPatients"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:backgroundTint="@color/accent_emerald"
-                android:text="@string/patients" />
-
-            <Button
-                android:id="@+id/btnHistory"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="@string/history" />
-
-            <Button
-                android:id="@+id/btnChatbot"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="@string/chatbot" />
-
-            <Button
-                android:id="@+id/btnProfile"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="@string/profile" />
-
-            <Button
-                android:id="@+id/btnSettings"
-                style="?attr/materialButtonOutlinedStyle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="@string/settings" />
-        </GridLayout>
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="8dp"
-            android:text="Recent Diagnoses"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rvRecentReports"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
-    </LinearLayout>
-</ScrollView>
+</androidx.drawerlayout.widget.DrawerLayout>

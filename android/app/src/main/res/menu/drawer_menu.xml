@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="single">
+        <item
+            android:id="@+id/nav_dashboard"
+            android:icon="@android:drawable/ic_menu_compass"
+            android:title="Dashboard" />
+        <item
+            android:id="@+id/nav_diagnosis"
+            android:icon="@android:drawable/ic_menu_camera"
+            android:title="AI Diagnosis" />
+        <item
+            android:id="@+id/nav_patients"
+            android:icon="@android:drawable/ic_menu_myplaces"
+            android:title="Patients" />
+        <item
+            android:id="@+id/nav_reports"
+            android:icon="@android:drawable/ic_menu_recent_history"
+            android:title="Reports" />
+        <item
+            android:id="@+id/nav_assistant"
+            android:icon="@android:drawable/ic_menu_help"
+            android:title="AI Assistant" />
+    </group>
+    
+    <item android:title="Account &amp; Settings">
+        <menu>
+            <item
+                android:id="@+id/nav_profile"
+                android:icon="@android:drawable/ic_menu_my_calendar"
+                android:title="Profile" />
+            <item
+                android:id="@+id/nav_settings"
+                android:icon="@android:drawable/ic_menu_preferences"
+                android:title="Settings" />
+            <item
+                android:id="@+id/nav_logout"
+                android:icon="@android:drawable/ic_menu_close_clear_cancel"
+                android:title="Logout" />
+        </menu>
+    </item>
+</menu>
