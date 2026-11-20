@@ -1,0 +1,11 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oraldiagnosis-ingress
+  namespace: oraldiagnosis-ai
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
