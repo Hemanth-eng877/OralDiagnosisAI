@@ -24,19 +24,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 
 
-BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-MODEL_PATH = os.path.join(BASE_DIR, "oral_model.tflite")
-ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp"}
-CLASS_LABELS = {0: "Normal", 1: "OSCC"}
+from config import get_config
+
+current_config = get_config()
+BASE_DIR = current_config.BASE_DIR
+UPLOAD_FOLDER = current_config.UPLOAD_FOLDER
+MODEL_PATH = current_config.MODEL_PATH
+ALLOWED_EXTENSIONS = current_config.ALLOWED_EXTENSIONS
+CLASS_LABELS = current_config.CLASS_LABELS
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret-key-in-production")
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
-FIREBASE_API_KEY = "AIzaSyCqGkY4Vv-q9eBRLgMdwKYlIVfQYk4DPnE"
+app.config.from_object(current_config)
+FIREBASE_API_KEY = current_config.FIREBASE_API_KEY
 
 interpreter = None
 input_details = None
