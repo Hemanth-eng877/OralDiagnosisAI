@@ -60,6 +60,11 @@ public class PatientAdapter extends RecyclerView.Adapter<PatientAdapter.PatientV
             String genderStr = item.gender != null && !item.gender.isEmpty() ? item.gender : "U";
             binding.tvAgeGender.setText(ageStr + " / " + genderStr);
             binding.tvPhone.setText(item.phone != null && !item.phone.isEmpty() ? item.phone : "No Phone");
+            
+            // Dummy logic for latest diagnosis since backend doesn't provide it yet
+            binding.tvStatusBadge.setText("Not Tested");
+            binding.tvStatusBadge.setTextColor(android.graphics.Color.parseColor("#94A3B8"));
+            binding.tvStatusBadge.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#3394A3B8")));
 
             binding.btnEdit.setOnClickListener(v -> {
                 if (listener != null) listener.onEdit(item);

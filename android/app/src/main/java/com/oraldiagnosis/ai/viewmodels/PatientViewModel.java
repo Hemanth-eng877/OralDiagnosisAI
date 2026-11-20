@@ -8,30 +8,24 @@ import androidx.lifecycle.MutableLiveData;
 
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
+import com.google.firebase.firestore.Query;
 import com.oraldiagnosis.ai.firebase.FirebaseManager;
 import com.oraldiagnosis.ai.models.GenericResponse;
 import com.oraldiagnosis.ai.models.PatientItem;
 import com.oraldiagnosis.ai.models.PatientResponse;
-import com.oraldiagnosis.ai.repository.AppRepository;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-
 public class PatientViewModel extends AndroidViewModel {
-    private AppRepository repository;
     private MutableLiveData<PatientResponse> patientsData = new MutableLiveData<>();
     private MutableLiveData<GenericResponse> actionResult = new MutableLiveData<>();
     private MutableLiveData<String> errorMessage = new MutableLiveData<>();
 
     public PatientViewModel(@NonNull Application application) {
         super(application);
-        repository = new AppRepository(application);
         FirebaseManager.init(application);
     }
 
@@ -48,14 +42,13 @@ public class PatientViewModel extends AndroidViewModel {
     }
 
     public void loadPatients(String userId) {
-        // Query both Firestore directly (where web users store patients) and Flask REST API to ensure 100% shared data
         FirebaseManager.getFirestore().collection("patients")
+                .whereEqualTo("user_id", userId)
                 .get()
                 .addOnSuccessListener(queryDocumentSnapshots -> {
                     List<PatientItem> firestorePatients = new ArrayList<>();
                     for (DocumentSnapshot doc : queryDocumentSnapshots.getDocuments()) {
-                        String name = doc.getString("name") != null ? doc.getString("name") : doc.getString("full_name");
-                        if (name == null) name = "Patient " + doc.getId();
+                        String name = doc.getString("full_name");
                         Integer age = doc.getLong("age") != null ? doc.getLong("age").intValue() : null;
                         String gender = doc.getString("gender");
                         String phone = doc.getString("phone");
@@ -64,136 +57,75 @@ public class PatientViewModel extends AndroidViewModel {
 
                         firestorePatients.add(new PatientItem(doc.getId(), userId, name, age, gender, phone, email, notes));
                     }
-
-                    // Also fetch REST API patients and combine
-                    repository.getApiService().getPatients(userId).enqueue(new Callback<PatientResponse>() {
-                        @Override
-                        public void onResponse(Call<PatientResponse> call, Response<PatientResponse> response) {
-                            if (response.isSuccessful() && response.body() != null && response.body().patients != null) {
-                                for (PatientItem restP : response.body().patients) {
-                                    boolean exists = false;
-                                    for (PatientItem fp : firestorePatients) {
-                                        if (fp.id != null && fp.id.equals(restP.id)) {
-                                            exists = true;
-                                            break;
-                                        }
-                                    }
-                                    if (!exists) firestorePatients.add(restP);
-                                }
-                            }
-                            patientsData.setValue(new PatientResponse("success", firestorePatients));
-                        }
-
-                        @Override
-                        public void onFailure(Call<PatientResponse> call, Throwable t) {
-                            // Even if Flask server is unreachable, we successfully return Firestore patients!
-                            patientsData.setValue(new PatientResponse("success", firestorePatients));
-                        }
+                    
+                    // Sort locally to avoid Firestore composite index requirement
+                    firestorePatients.sort((p1, p2) -> {
+                        DocumentSnapshot d1 = queryDocumentSnapshots.getDocuments().stream().filter(d -> d.getId().equals(p1.id)).findFirst().orElse(null);
+                        DocumentSnapshot d2 = queryDocumentSnapshots.getDocuments().stream().filter(d -> d.getId().equals(p2.id)).findFirst().orElse(null);
+                        if (d1 == null || d2 == null) return 0;
+                        java.util.Date date1 = d1.getDate("created_at");
+                        java.util.Date date2 = d2.getDate("created_at");
+                        if (date1 == null && date2 == null) return 0;
+                        if (date1 == null) return 1;
+                        if (date2 == null) return -1;
+                        return date2.compareTo(date1);
                     });
+                    
+                    patientsData.setValue(new PatientResponse("success", firestorePatients));
                 })
                 .addOnFailureListener(e -> {
-                    // Fallback to purely Flask REST API if direct Firestore fetch fails
-                    repository.getApiService().getPatients(userId).enqueue(new Callback<PatientResponse>() {
-                        @Override
-                        public void onResponse(Call<PatientResponse> call, Response<PatientResponse> response) {
-                            if (response.isSuccessful() && response.body() != null) {
-                                patientsData.setValue(response.body());
-                            } else {
-                                errorMessage.setValue("Failed to fetch patients.");
-                            }
-                        }
-
-                        @Override
-                        public void onFailure(Call<PatientResponse> call, Throwable t) {
-                            errorMessage.setValue("Network error: " + t.getMessage());
-                        }
-                    });
+                    errorMessage.setValue("Failed to fetch patients from database: " + e.getMessage());
                 });
     }
 
     public void addPatient(PatientItem patient) {
         Map<String, Object> data = new HashMap<>();
-        data.put("name", patient.full_name);
         data.put("full_name", patient.full_name);
-        if (patient.age != null) data.put("age", patient.age);
-        if (patient.gender != null) data.put("gender", patient.gender);
-        if (patient.phone != null) data.put("phone", patient.phone);
-        if (patient.email != null) data.put("email", patient.email);
-        if (patient.notes != null) data.put("notes", patient.notes);
-        if (patient.user_id != null) data.put("userId", patient.user_id);
-        data.put("createdAt", FieldValue.serverTimestamp());
-        data.put("updatedAt", FieldValue.serverTimestamp());
+        data.put("age", patient.age);
+        data.put("gender", patient.gender);
+        data.put("phone", patient.phone);
+        data.put("email", patient.email);
+        data.put("notes", patient.notes);
+        data.put("user_id", patient.user_id);
+        
+        com.google.firebase.auth.FirebaseUser user = com.google.firebase.auth.FirebaseAuth.getInstance().getCurrentUser();
+        if (user != null) {
+            data.put("uid", user.getUid());
+        } else {
+            data.put("uid", patient.user_id);
+        }
+        
+        data.put("created_at", FieldValue.serverTimestamp());
 
-        // Write directly to Firestore patients collection shared with Web app
         FirebaseManager.getFirestore().collection("patients")
                 .add(data)
                 .addOnSuccessListener(documentReference -> {
                     patient.id = documentReference.getId();
-                    // Also invoke Flask REST endpoint
-                    repository.getApiService().addPatient(patient).enqueue(new Callback<GenericResponse>() {
-                        @Override
-                        public void onResponse(Call<GenericResponse> call, Response<GenericResponse> response) {}
-                        @Override
-                        public void onFailure(Call<GenericResponse> call, Throwable t) {}
-                    });
-                    actionResult.setValue(new GenericResponse("success", "Patient added successfully to shared Firestore database."));
+                    // Update document with its own ID
+                    documentReference.update("id", patient.id);
+                    actionResult.setValue(new GenericResponse("success", "Patient added successfully."));
                 })
                 .addOnFailureListener(e -> {
-                    // Fallback to REST API
-                    repository.getApiService().addPatient(patient).enqueue(new Callback<GenericResponse>() {
-                        @Override
-                        public void onResponse(Call<GenericResponse> call, Response<GenericResponse> response) {
-                            if (response.isSuccessful() && response.body() != null) {
-                                actionResult.setValue(response.body());
-                            } else {
-                                actionResult.setValue(new GenericResponse("error", "Failed to add patient."));
-                            }
-                        }
-                        @Override
-                        public void onFailure(Call<GenericResponse> call, Throwable t) {
-                            actionResult.setValue(new GenericResponse("error", "Network error: " + t.getMessage()));
-                        }
-                    });
+                    actionResult.setValue(new GenericResponse("error", "Failed to add patient: " + e.getMessage()));
                 });
     }
 
     public void editPatient(String patientId, PatientItem patient) {
         Map<String, Object> data = new HashMap<>();
-        data.put("name", patient.full_name);
         data.put("full_name", patient.full_name);
-        if (patient.age != null) data.put("age", patient.age);
-        if (patient.gender != null) data.put("gender", patient.gender);
-        if (patient.phone != null) data.put("phone", patient.phone);
-        if (patient.email != null) data.put("email", patient.email);
-        if (patient.notes != null) data.put("notes", patient.notes);
-        data.put("updatedAt", FieldValue.serverTimestamp());
+        data.put("age", patient.age);
+        data.put("gender", patient.gender);
+        data.put("phone", patient.phone);
+        data.put("email", patient.email);
+        data.put("notes", patient.notes);
 
         FirebaseManager.getFirestore().collection("patients").document(patientId)
                 .update(data)
                 .addOnSuccessListener(aVoid -> {
-                    repository.getApiService().editPatient(patientId, patient).enqueue(new Callback<GenericResponse>() {
-                        @Override
-                        public void onResponse(Call<GenericResponse> call, Response<GenericResponse> response) {}
-                        @Override
-                        public void onFailure(Call<GenericResponse> call, Throwable t) {}
-                    });
-                    actionResult.setValue(new GenericResponse("success", "Patient updated in shared Firestore database."));
+                    actionResult.setValue(new GenericResponse("success", "Patient updated successfully."));
                 })
                 .addOnFailureListener(e -> {
-                    repository.getApiService().editPatient(patientId, patient).enqueue(new Callback<GenericResponse>() {
-                        @Override
-                        public void onResponse(Call<GenericResponse> call, Response<GenericResponse> response) {
-                            if (response.isSuccessful() && response.body() != null) {
-                                actionResult.setValue(response.body());
-                            } else {
-                                actionResult.setValue(new GenericResponse("error", "Failed to edit patient."));
-                            }
-                        }
-                        @Override
-                        public void onFailure(Call<GenericResponse> call, Throwable t) {
-                            actionResult.setValue(new GenericResponse("error", "Network error: " + t.getMessage()));
-                        }
-                    });
+                    actionResult.setValue(new GenericResponse("error", "Failed to edit patient: " + e.getMessage()));
                 });
     }
 
@@ -201,29 +133,10 @@ public class PatientViewModel extends AndroidViewModel {
         FirebaseManager.getFirestore().collection("patients").document(patientId)
                 .delete()
                 .addOnSuccessListener(aVoid -> {
-                    repository.getApiService().deletePatient(patientId, userId).enqueue(new Callback<GenericResponse>() {
-                        @Override
-                        public void onResponse(Call<GenericResponse> call, Response<GenericResponse> response) {}
-                        @Override
-                        public void onFailure(Call<GenericResponse> call, Throwable t) {}
-                    });
-                    actionResult.setValue(new GenericResponse("success", "Patient deleted from shared Firestore database."));
+                    actionResult.setValue(new GenericResponse("success", "Patient deleted successfully."));
                 })
                 .addOnFailureListener(e -> {
-                    repository.getApiService().deletePatient(patientId, userId).enqueue(new Callback<GenericResponse>() {
-                        @Override
-                        public void onResponse(Call<GenericResponse> call, Response<GenericResponse> response) {
-                            if (response.isSuccessful() && response.body() != null) {
-                                actionResult.setValue(response.body());
-                            } else {
-                                actionResult.setValue(new GenericResponse("error", "Failed to delete patient."));
-                            }
-                        }
-                        @Override
-                        public void onFailure(Call<GenericResponse> call, Throwable t) {
-                            actionResult.setValue(new GenericResponse("error", "Network error: " + t.getMessage()));
-                        }
-                    });
+                    actionResult.setValue(new GenericResponse("error", "Failed to delete patient: " + e.getMessage()));
                 });
     }
 }

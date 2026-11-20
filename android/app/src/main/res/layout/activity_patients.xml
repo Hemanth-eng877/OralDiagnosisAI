@@ -2,31 +2,54 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/bg_light"
     android:padding="16dp">
 
-    <TextView
-        android:id="@+id/tvHeader"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:id="@+id/llHeader"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/patients"
-        android:textColor="@color/primary_blue"
-        android:textSize="22sp"
-        android:textStyle="bold" />
+        android:orientation="vertical">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Patient management"
+            android:textColor="@color/primary_blue"
+            android:textSize="14sp"
+            android:textAllCaps="true" />
+            
+        <TextView
+            android:id="@+id/tvHeader"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Maintain a polished care record for every patient"
+            android:textColor="@color/text_primary_dark"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+            
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Review patient details and access clinical actions from a single dashboard."
+            android:textColor="@color/text_secondary_dark"
+            android:textSize="14sp" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvPatients"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_above="@+id/btnAddPatient"
-        android:layout_below="@+id/tvHeader"
+        android:layout_below="@+id/llHeader"
         android:layout_marginTop="12dp"
         android:layout_marginBottom="12dp" />
 
-    <Button
+        <Button
         android:id="@+id/btnAddPatient"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
-        android:backgroundTint="@color/accent_emerald"
-        android:text="Add New Patient" />
+        android:backgroundTint="@color/primary_blue"
+        android:text="Add Patient" />
 </RelativeLayout>
