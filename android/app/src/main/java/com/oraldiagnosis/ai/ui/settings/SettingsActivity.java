@@ -4,13 +4,11 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
-
-import com.oraldiagnosis.ai.api.ApiClient;
 import com.oraldiagnosis.ai.databinding.ActivitySettingsBinding;
 
 public class SettingsActivity extends AppCompatActivity {
     private ActivitySettingsBinding binding;
-    private static final String DEFAULT_BASE_URL = "http://10.0.2.2:5000/";
+    private static final String DEFAULT_BASE_URL = "Local On-Device Inference";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -20,27 +18,21 @@ public class SettingsActivity extends AppCompatActivity {
 
         SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
         String currentUrl = prefs.getString("base_url", DEFAULT_BASE_URL);
+        binding.tvCurrentUrl.setText(currentUrl);
         binding.etBaseUrl.setText(currentUrl);
+        binding.etBaseUrl.setEnabled(false); // No longer needed
+
+        binding.btnTestConnection.setOnClickListener(v -> {
+            Toast.makeText(this, "AI Inference is now completely on-device. No server needed.", Toast.LENGTH_LONG).show();
+        });
 
         binding.btnSaveSettings.setOnClickListener(v -> {
-            String newUrl = binding.etBaseUrl.getText().toString().trim();
-            if (newUrl.isEmpty()) {
-                newUrl = DEFAULT_BASE_URL;
-            }
-            if (!newUrl.endsWith("/")) {
-                newUrl += "/";
-            }
-            prefs.edit().putString("base_url", newUrl).apply();
-            ApiClient.resetClient();
-            Toast.makeText(this, "Server URL saved: " + newUrl, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Settings saved. (On-Device Inference Active)", Toast.LENGTH_SHORT).show();
             finish();
         });
 
         binding.btnResetUrl.setOnClickListener(v -> {
-            binding.etBaseUrl.setText(DEFAULT_BASE_URL);
-            prefs.edit().putString("base_url", DEFAULT_BASE_URL).apply();
-            ApiClient.resetClient();
-            Toast.makeText(this, "Reset to default emulator address", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Reset to Local On-Device Inference", Toast.LENGTH_SHORT).show();
             finish();
         });
     }

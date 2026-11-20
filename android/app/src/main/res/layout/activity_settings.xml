@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/bg_light"
     android:orientation="vertical"
     android:padding="24dp">
 
@@ -17,18 +18,44 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="4dp"
+        android:text="Current Server URL:"
+        android:textColor="@color/text_primary_dark"
+        android:textStyle="bold" />
+        
+    <TextView
+        android:id="@+id/tvCurrentUrl"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="http://10.0.2.2:5000/"
+        android:textColor="@color/text_secondary_dark"
+        android:textSize="14sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
         android:text="Backend API Base URL:"
+        android:textColor="@color/text_primary_dark"
         android:textStyle="bold" />
 
     <EditText
         android:id="@+id/etBaseUrl"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
+        android:layout_marginBottom="16dp"
         android:hint="http://10.0.2.2:5000/"
         android:inputType="textUri"
         android:padding="12dp" />
+
+    <Button
+        android:id="@+id/btnTestConnection"
+        style="?attr/materialButtonOutlinedStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp"
+        android:text="Test Connection" />
 
     <Button
         android:id="@+id/btnSaveSettings"
