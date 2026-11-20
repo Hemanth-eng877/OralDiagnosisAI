@@ -10,8 +10,18 @@
 
     <color name="primary_blue">#1E3A8A</color>
     <color name="accent_emerald">#10B981</color>
+    
+    <!-- Dark Theme (deprecated but kept for fallback/legacy) -->
     <color name="bg_dark">#0F172A</color>
     <color name="surface_card">#1E293B</color>
+    <color name="bg_card">#1E293B</color>
     <color name="text_secondary">#94A3B8</color>
+    
+    <!-- Light Medical Theme -->
+    <color name="bg_light">#F5F9FF</color>
+    <color name="text_primary_dark">#1A1A1A</color>
+    <color name="text_secondary_dark">#666666</color>
+    <color name="surface_white">#FFFFFF</color>
+
     <color name="danger_red">#EF4444</color>
 </resources>
