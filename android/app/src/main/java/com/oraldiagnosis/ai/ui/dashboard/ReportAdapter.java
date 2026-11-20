@@ -26,14 +26,14 @@ public class ReportAdapter extends RecyclerView.Adapter<ReportAdapter.ReportView
         return new ReportViewHolder(binding);
     }
 
-    @Override
-    public void onBindViewHolder(@NonNull ReportViewHolder holder, int position) {
-        holder.bind(reportList.get(position));
+    public interface OnItemClickListener {
+        void onItemClick(ReportItem item);
     }
-
-    @Override
-    public int getItemCount() {
-        return reportList.size();
+    
+    private OnItemClickListener listener;
+    
+    public void setOnItemClickListener(OnItemClickListener listener) {
+        this.listener = listener;
     }
 
     static class ReportViewHolder extends RecyclerView.ViewHolder {
@@ -44,7 +44,7 @@ public class ReportAdapter extends RecyclerView.Adapter<ReportAdapter.ReportView
             this.binding = binding;
         }
 
-        public void bind(ReportItem item) {
+        public void bind(ReportItem item, OnItemClickListener listener) {
             binding.tvPatientName.setText(item.patient_name != null && !item.patient_name.isEmpty() ? item.patient_name : "Patient ID: " + item.patient_id);
             binding.tvDiagnosis.setText(item.diagnosis != null ? item.diagnosis : "Unknown");
             binding.tvConfidence.setText(String.format("%.2f%%", item.confidence));
@@ -55,6 +55,20 @@ public class ReportAdapter extends RecyclerView.Adapter<ReportAdapter.ReportView
             } else {
                 binding.tvDiagnosis.setTextColor(0xFF10B981);
             }
+            
+            itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onItemClick(item);
+            });
         }
+    }
+    
+    @Override
+    public void onBindViewHolder(@NonNull ReportViewHolder holder, int position) {
+        holder.bind(reportList.get(position), listener);
+    }
+    
+    @Override
+    public int getItemCount() {
+        return reportList.size();
     }
 }

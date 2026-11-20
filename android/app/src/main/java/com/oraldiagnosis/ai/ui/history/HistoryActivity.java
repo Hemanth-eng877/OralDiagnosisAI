@@ -1,9 +1,11 @@
 package com.oraldiagnosis.ai.ui.history;
 
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.view.View;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.lifecycle.ViewModelProvider;
@@ -22,6 +24,7 @@ public class HistoryActivity extends AppCompatActivity {
     private ReportViewModel viewModel;
     private ReportAdapter adapter;
     private List<ReportItem> fullList = new ArrayList<>();
+    private String currentFilter = "All"; // "All", "OSCC", "Normal", "Recent"
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,11 +39,15 @@ public class HistoryActivity extends AppCompatActivity {
         binding.rvReports.setLayoutManager(new LinearLayoutManager(this));
         binding.rvReports.setAdapter(adapter);
 
+        adapter.setOnItemClickListener(item -> {
+            showReportDetailsDialog(item);
+        });
+
         viewModel = new ViewModelProvider(this).get(ReportViewModel.class);
         viewModel.getReportsData().observe(this, response -> {
             if ("success".equals(response.status) && response.reports != null) {
                 fullList = response.reports;
-                adapter.setReports(fullList);
+                applyFilters();
             }
         });
 
@@ -54,11 +61,24 @@ public class HistoryActivity extends AppCompatActivity {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                filter(s.toString());
+                applyFilters();
             }
 
             @Override
             public void afterTextChanged(Editable s) {}
+        });
+        
+        binding.rgFilters.setOnCheckedChangeListener((group, checkedId) -> {
+            if (checkedId == binding.rbAll.getId()) {
+                currentFilter = "All";
+            } else if (checkedId == binding.rbOscc.getId()) {
+                currentFilter = "OSCC";
+            } else if (checkedId == binding.rbNormal.getId()) {
+                currentFilter = "Normal";
+            } else if (checkedId == binding.rbRecent.getId()) {
+                currentFilter = "Recent";
+            }
+            applyFilters();
         });
 
         if (userId != null) {
@@ -66,19 +86,54 @@ public class HistoryActivity extends AppCompatActivity {
         }
     }
 
-    private void filter(String query) {
-        if (query == null || query.trim().isEmpty()) {
-            adapter.setReports(fullList);
-            return;
-        }
-        String q = query.toLowerCase().trim();
+    private void applyFilters() {
+        String query = binding.etSearch.getText().toString().toLowerCase().trim();
         List<ReportItem> filtered = new ArrayList<>();
+        
         for (ReportItem item : fullList) {
+            // Apply text search
             String name = item.patient_name != null ? item.patient_name.toLowerCase() : "";
-            if (name.contains(q) || (item.diagnosis != null && item.diagnosis.toLowerCase().contains(q))) {
+            boolean matchesSearch = query.isEmpty() || name.contains(query) || (item.diagnosis != null && item.diagnosis.toLowerCase().contains(query));
+            
+            if (!matchesSearch) continue;
+            
+            // Apply category filter
+            if (currentFilter.equals("All") || currentFilter.equals("Recent")) {
+                filtered.add(item);
+            } else if (currentFilter.equals("OSCC") && "OSCC".equalsIgnoreCase(item.diagnosis)) {
+                filtered.add(item);
+            } else if (currentFilter.equals("Normal") && "Normal".equalsIgnoreCase(item.diagnosis)) {
                 filtered.add(item);
             }
         }
+        
+        // If Recent, just keep top 5
+        if (currentFilter.equals("Recent") && filtered.size() > 5) {
+            filtered = filtered.subList(0, 5);
+        }
+        
         adapter.setReports(filtered);
+        
+        if (filtered.isEmpty()) {
+            binding.tvEmptyState.setVisibility(View.VISIBLE);
+            binding.rvReports.setVisibility(View.GONE);
+        } else {
+            binding.tvEmptyState.setVisibility(View.GONE);
+            binding.rvReports.setVisibility(View.VISIBLE);
+        }
+    }
+    
+    private void showReportDetailsDialog(ReportItem item) {
+        String message = String.format("Patient: %s\nDiagnosis: %s\nConfidence: %.2f%%\nDate: %s", 
+                item.patient_name != null ? item.patient_name : "Unknown",
+                item.diagnosis,
+                item.confidence,
+                item.created_at != null ? item.created_at : "Unknown");
+                
+        new AlertDialog.Builder(this)
+                .setTitle("Report Details")
+                .setMessage(message)
+                .setPositiveButton("Close", (dialog, which) -> dialog.dismiss())
+                .show();
     }
 }
