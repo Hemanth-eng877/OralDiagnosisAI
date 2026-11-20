@@ -2,6 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/bg_light"
     android:fillViewport="true">
 
     <LinearLayout
@@ -14,11 +15,18 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="32dp"
-            android:text="Create Account"
+            android:text="Create your account"
             android:textColor="@color/primary_blue"
             android:textSize="28sp"
             android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp"
+            android:text="Join the professional OralDiagnosisAI care team."
+            android:textColor="@color/text_secondary_dark"
+            android:textSize="14sp" />
 
         <EditText
             android:id="@+id/etName"
@@ -52,7 +60,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:backgroundTint="@color/primary_blue"
-            android:text="@string/register" />
+            android:text="Create account" />
 
         <Button
             android:id="@+id/btnBackToLogin"
@@ -60,6 +68,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Back to Login" />
+            android:text="Already registered? Login" />
     </LinearLayout>
 </ScrollView>

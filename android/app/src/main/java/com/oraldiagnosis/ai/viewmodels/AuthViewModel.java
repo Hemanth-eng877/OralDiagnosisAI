@@ -7,29 +7,26 @@ import androidx.lifecycle.AndroidViewModel;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
 
+import com.google.firebase.FirebaseNetworkException;
 import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.auth.FirebaseAuth;
-import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException;
+import com.google.firebase.auth.FirebaseAuthUserCollisionException;
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException;
+import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.oraldiagnosis.ai.firebase.FirebaseManager;
-import com.oraldiagnosis.ai.models.AuthRequest;
 import com.oraldiagnosis.ai.models.AuthResponse;
-import com.oraldiagnosis.ai.repository.AppRepository;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
-
 public class AuthViewModel extends AndroidViewModel {
-    private AppRepository repository;
     private MutableLiveData<AuthResponse> loginResult = new MutableLiveData<>();
     private MutableLiveData<AuthResponse> signupResult = new MutableLiveData<>();
+    private MutableLiveData<AuthResponse> resetPasswordResult = new MutableLiveData<>();
 
     public AuthViewModel(@NonNull Application application) {
         super(application);
-        repository = new AppRepository(application);
         FirebaseManager.init(application);
     }
 
@@ -41,47 +38,38 @@ public class AuthViewModel extends AndroidViewModel {
         return signupResult;
     }
 
-    public void login(String email, String password) {
-        // Attempt Flask REST API first, then sync/verify with Firebase Auth and Firestore for shared web/android data
-        repository.getApiService().login(new AuthRequest(email, password)).enqueue(new Callback<AuthResponse>() {
-            @Override
-            public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
-                if (response.isSuccessful() && response.body() != null && "success".equals(response.body().status)) {
-                    logAuthEvent(FirebaseAnalytics.Event.LOGIN, email, true);
-                    loginResult.setValue(response.body());
-                } else {
-                    // Fallback: Check direct Firebase Authentication (in case account was created on web directly via Firebase)
-                    authenticateViaFirebase(email, password, false);
-                }
-            }
+    public LiveData<AuthResponse> getResetPasswordResult() {
+        return resetPasswordResult;
+    }
 
-            @Override
-            public void onFailure(Call<AuthResponse> call, Throwable t) {
-                // If local Flask server is offline or unreachable, try direct Firebase Auth
-                authenticateViaFirebase(email, password, false);
-            }
-        });
+    public void resetPassword(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            resetPasswordResult.setValue(new AuthResponse("error", "Please enter your email address", null, null));
+            return;
+        }
+        FirebaseManager.getAuth().sendPasswordResetEmail(email.trim())
+                .addOnSuccessListener(aVoid -> {
+                    resetPasswordResult.setValue(new AuthResponse("success", "Password reset email sent. Please check your inbox.", null, null));
+                })
+                .addOnFailureListener(e -> {
+                    String errorMsg = "Unable to send reset email.";
+                    if (e instanceof com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                        errorMsg = "No account found with this email";
+                    } else if (e instanceof FirebaseNetworkException) {
+                        errorMsg = "Unable to send reset email. Check your connection.";
+                    } else {
+                        errorMsg = e.getMessage();
+                    }
+                    resetPasswordResult.setValue(new AuthResponse("error", errorMsg, null, null));
+                });
+    }
+
+    public void login(String email, String password) {
+        authenticateViaFirebase(email, password, false);
     }
 
     public void signup(String name, String email, String password) {
-        repository.getApiService().signup(new AuthRequest(name, email, password)).enqueue(new Callback<AuthResponse>() {
-            @Override
-            public void onResponse(Call<AuthResponse> call, Response<AuthResponse> response) {
-                if (response.isSuccessful() && response.body() != null && "success".equals(response.body().status)) {
-                    logAuthEvent(FirebaseAnalytics.Event.SIGN_UP, email, true);
-                    // Also mirror in Firebase Auth and Firestore users collection
-                    mirrorToFirebase(name, email, password, response.body().user_id);
-                    signupResult.setValue(response.body());
-                } else {
-                    authenticateViaFirebase(email, password, true, name);
-                }
-            }
-
-            @Override
-            public void onFailure(Call<AuthResponse> call, Throwable t) {
-                authenticateViaFirebase(email, password, true, name);
-            }
-        });
+        authenticateViaFirebase(email, password, true, name);
     }
 
     private void authenticateViaFirebase(String email, String password, boolean isSignup, String... optionalName) {
@@ -92,18 +80,58 @@ public class AuthViewModel extends AndroidViewModel {
                     .addOnSuccessListener(authResult -> {
                         String uid = authResult.getUser() != null ? authResult.getUser().getUid() : "u_" + System.currentTimeMillis();
                         Map<String, Object> userData = new HashMap<>();
+                        userData.put("uid", uid);
+                        userData.put("full_name", name);
                         userData.put("name", name);
                         userData.put("email", email);
                         userData.put("role", "Doctor");
                         userData.put("created_at", com.google.firebase.firestore.FieldValue.serverTimestamp());
 
-                        FirebaseManager.getFirestore().collection("users").document(uid).set(userData);
-                        logAuthEvent(FirebaseAnalytics.Event.SIGN_UP, email, true);
-                        signupResult.setValue(new AuthResponse("success", "Account created in Firebase", uid, name));
+                        FirebaseManager.getFirestore().collection("users").document(uid).set(userData)
+                                .addOnSuccessListener(aVoid -> {
+                                    logAuthEvent(FirebaseAnalytics.Event.SIGN_UP, email, true);
+                                    signupResult.setValue(new AuthResponse("success", "Account created successfully.", uid, name));
+                                })
+                                .addOnFailureListener(e -> {
+                                    String errorMsg = "Failed to save user profile.";
+                                    android.util.Log.e("AuthViewModel", "Firestore write failure: " + e.getMessage(), e);
+                                    if (e instanceof FirebaseFirestoreException) {
+                                        FirebaseFirestoreException fsEx = (FirebaseFirestoreException) e;
+                                        android.util.Log.e("AuthViewModel", "Firestore Error Code: " + fsEx.getCode());
+                                        if (fsEx.getCode() == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
+                                            errorMsg = "Permission denied to create user profile.";
+                                        } else {
+                                            errorMsg = "Firestore error: [" + fsEx.getCode() + "] " + fsEx.getMessage();
+                                        }
+                                    }
+                                    logAuthEvent(FirebaseAnalytics.Event.SIGN_UP, email, false);
+                                    signupResult.setValue(new AuthResponse("error", errorMsg, null, null));
+                                });
                     })
                     .addOnFailureListener(e -> {
+                        String errorMsg = "Signup failed";
+                        if (e instanceof com.google.firebase.auth.FirebaseAuthException) {
+                            com.google.firebase.auth.FirebaseAuthException authEx = (com.google.firebase.auth.FirebaseAuthException) e;
+                            android.util.Log.e("AuthViewModel", "FirebaseAuthException Error Code: " + authEx.getErrorCode());
+                            android.util.Log.e("AuthViewModel", "FirebaseAuthException Message: " + authEx.getMessage());
+                            errorMsg = "Signup error: [" + authEx.getErrorCode() + "] " + authEx.getMessage();
+                        } else {
+                            android.util.Log.e("AuthViewModel", "Signup Failure: " + e.getMessage(), e);
+                            errorMsg = "Signup error: " + e.getMessage();
+                        }
+                        
+                        if (e instanceof FirebaseAuthUserCollisionException) {
+                            errorMsg = "Email already exists.";
+                        } else if (e instanceof FirebaseAuthWeakPasswordException) {
+                            errorMsg = "Weak password. Please use at least 6 characters.";
+                        } else if (e instanceof FirebaseAuthInvalidCredentialsException) {
+                            errorMsg = "Invalid email format.";
+                        } else if (e instanceof FirebaseNetworkException) {
+                            errorMsg = "Network failure. Please check your connection.";
+                        }
+                        
                         logAuthEvent(FirebaseAnalytics.Event.SIGN_UP, email, false);
-                        signupResult.setValue(new AuthResponse("error", "Firebase Signup failed: " + e.getMessage(), null, null));
+                        signupResult.setValue(new AuthResponse("error", errorMsg, null, null));
                     });
         } else {
             auth.signInWithEmailAndPassword(email, password)
@@ -111,33 +139,24 @@ public class AuthViewModel extends AndroidViewModel {
                         String uid = authResult.getUser() != null ? authResult.getUser().getUid() : "u_" + System.currentTimeMillis();
                         FirebaseManager.getFirestore().collection("users").document(uid).get()
                                 .addOnSuccessListener(doc -> {
-                                    String name = doc.exists() && doc.getString("name") != null ? doc.getString("name") : "Doctor";
+                                    String name = doc.exists() && doc.getString("full_name") != null ? doc.getString("full_name") : "Doctor";
                                     logAuthEvent(FirebaseAnalytics.Event.LOGIN, email, true);
-                                    loginResult.setValue(new AuthResponse("success", "Logged in via Firebase", uid, name));
+                                    loginResult.setValue(new AuthResponse("success", "Welcome back.", uid, name));
                                 })
                                 .addOnFailureListener(e -> {
                                     logAuthEvent(FirebaseAnalytics.Event.LOGIN, email, true);
-                                    loginResult.setValue(new AuthResponse("success", "Logged in via Firebase", uid, "Doctor"));
+                                    loginResult.setValue(new AuthResponse("success", "Welcome back.", uid, "Doctor"));
                                 });
                     })
                     .addOnFailureListener(e -> {
+                        String errorMsg = "Invalid email or password.";
+                        if (e instanceof FirebaseNetworkException) {
+                            errorMsg = "Network failure. Please check your connection.";
+                        }
                         logAuthEvent(FirebaseAnalytics.Event.LOGIN, email, false);
-                        loginResult.setValue(new AuthResponse("error", "Authentication failed: Check email or password", null, null));
+                        loginResult.setValue(new AuthResponse("error", errorMsg, null, null));
                     });
         }
-    }
-
-    private void mirrorToFirebase(String name, String email, String password, String userId) {
-        try {
-            Map<String, Object> userData = new HashMap<>();
-            userData.put("name", name);
-            userData.put("email", email);
-            userData.put("role", "Doctor");
-            userData.put("created_at", com.google.firebase.firestore.FieldValue.serverTimestamp());
-            if (userId != null) {
-                FirebaseManager.getFirestore().collection("users").document(userId).set(userData);
-            }
-        } catch (Exception ignored) {}
     }
 
     private void logAuthEvent(String eventType, String email, boolean success) {

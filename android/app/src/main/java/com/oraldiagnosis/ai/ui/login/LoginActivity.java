@@ -26,26 +26,30 @@ public class LoginActivity extends AppCompatActivity {
         viewModel = new ViewModelProvider(this).get(AuthViewModel.class);
 
         binding.btnLogin.setOnClickListener(v -> {
-            String email = binding.etEmail.getText().toString().trim();
-            String password = binding.etPassword.getText().toString();
+            String email = binding.etEmail.getText() != null ? binding.etEmail.getText().toString().trim() : "";
+            String password = binding.etPassword.getText() != null ? binding.etPassword.getText().toString() : "";
             if (email.isEmpty() || password.isEmpty()) {
                 Toast.makeText(this, "Please enter both email and password.", Toast.LENGTH_SHORT).show();
                 return;
             }
             binding.btnLogin.setEnabled(false);
+            binding.btnLogin.setText("");
+            binding.pbLoading.setVisibility(android.view.View.VISIBLE);
             viewModel.login(email, password);
+        });
+
+        binding.tvForgotPassword.setOnClickListener(v -> {
+            startActivity(new Intent(LoginActivity.this, ForgotPasswordActivity.class));
         });
 
         binding.btnRegister.setOnClickListener(v -> {
             startActivity(new Intent(LoginActivity.this, RegisterActivity.class));
         });
 
-        binding.btnSettings.setOnClickListener(v -> {
-            startActivity(new Intent(LoginActivity.this, SettingsActivity.class));
-        });
-
         viewModel.getLoginResult().observe(this, authResponse -> {
             binding.btnLogin.setEnabled(true);
+            binding.btnLogin.setText(com.oraldiagnosis.ai.R.string.login);
+            binding.pbLoading.setVisibility(android.view.View.GONE);
             if ("success".equals(authResponse.status)) {
                 SharedPreferences prefs = getSharedPreferences("AppPrefs", MODE_PRIVATE);
                 prefs.edit()
