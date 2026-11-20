@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oraldiagnosis-web
+  namespace: oraldiagnosis-ai
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+      - name: web
+        image: oraldiagnosis-web:latest
