@@ -1,6 +1,6 @@
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import wraps
 
 import firebase_admin
@@ -1020,7 +1020,66 @@ def api_reports():
 
 @app.route("/api/health", methods=["GET"])
 def api_health():
-    return jsonify({"status": "success", "message": "API is reachable"})
+    return jsonify({
+        "status": "healthy",
+        "service": "OralDiagnosisAI-API",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    })
+
+
+@app.route("/api/health/ready", methods=["GET"])
+def api_health_ready():
+    checks = {
+        "database": False,
+        "model": False,
+        "storage": False,
+    }
+    
+    # 1. Database check
+    try:
+        if db is not None:
+            # Ping Firestore
+            users_ref.limit(1).stream(timeout=2.0)
+            checks["database"] = True
+        else:
+            checks["database"] = True # Fallback in-memory/SQLite is healthy
+    except Exception:
+        checks["database"] = False
+
+    # 2. Model check
+    checks["model"] = os.path.exists(MODEL_PATH)
+
+    # 3. Storage check
+    try:
+        test_file = os.path.join(UPLOAD_FOLDER, ".health_check")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        checks["storage"] = True
+    except Exception:
+        checks["storage"] = False
+
+    all_ready = all(checks.values())
+    status_code = 200 if all_ready else 503
+    return jsonify({
+        "status": "ready" if all_ready else "degraded",
+        "checks": checks,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }), status_code
+
+
+@app.route("/api/system/status", methods=["GET"])
+def api_system_status():
+    return jsonify({
+        "app_name": "OralDiagnosisAI",
+        "version": "2.1.0",
+        "environment": os.environ.get("FLASK_ENV", "development"),
+        "database_backend": "Firebase Firestore" if db is not None else "Fallback InMemory/SQLite",
+        "model_loaded": interpreter is not None,
+        "model_path": MODEL_PATH,
+        "allowed_extensions": list(ALLOWED_EXTENSIONS),
+        "class_labels": CLASS_LABELS,
+    })
 
 
 if __name__ == "__main__":

@@ -141,3 +141,28 @@ def test_api_diagnose_endpoint(client, monkeypatch, tmp_path):
     assert data["status"] == "success"
     assert data["diagnosis"] == "Normal"
     assert data["confidence"] == 98.5
+
+
+def test_api_health_liveness(client):
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["status"] == "healthy"
+    assert "timestamp" in data
+
+
+def test_api_health_readiness(client):
+    response = client.get("/api/health/ready")
+    assert response.status_code in (200, 503)
+    data = json.loads(response.data)
+    assert "checks" in data
+    assert "database" in data["checks"]
+
+
+def test_api_system_status(client):
+    response = client.get("/api/system/status")
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["app_name"] == "OralDiagnosisAI"
+    assert "version" in data
+    assert "class_labels" in data
