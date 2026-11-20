@@ -1,0 +1,2 @@
+# Ansible host provisioning playbook
+- hosts: all
