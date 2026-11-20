@@ -1,0 +1,2 @@
+@keyframes pulse-scan { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+.scanning { animation: pulse-scan 1.5s infinite; }
